@@ -1,16 +1,95 @@
-# React + Vite
+# Locksy • Front-end React
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+---
 
-Currently, two official plugins are available:
+### Présentation
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+La partie **frontend** de l'application Locksy est développée en **React** avec **Vite**, destinée à la gestion sécurisée des mots de passe, notes et cartes bancaires.
 
-## React Compiler
+Elle offre une interface moderne et intuitive grâce à **TailwindCSS** et **DaisyUI**, tout en intégrant des bonnes pratiques de développement (ESLint, Prettier, React Query, Axios).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+### Table des matières
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+-   [Prérequis](#prérequis)
+-   [Dépendances principales](#dépendances-principales)
+-   [Installation et configuration](#installation-et-configuration)
+-   [Scripts disponibles](#scripts-disponibles)
+-   [Structure du projet](#structure-du-projet)
+
+---
+
+### Prérequis
+
+-   **Node.js** (version 16+ recommandée)
+-   **npm** (fourni avec Node.js)
+-   Ligne de commande (Terminal, PowerShell, Bash)
+-   Navigateur moderne (Chrome, Edge, Firefox)
+
+---
+
+### Dépendances principales
+
+-   **vite** : bundler rapide et moderne
+-   **react** / **react-dom** : bibliothèque UI
+-   **react-router-dom** : routage SPA
+-   **axios** : requêtes HTTP
+-   **@tanstack/react-query** : gestion des données côté client
+-   **tailwindcss** : framework CSS utilitaire
+-   **daisyui** : composants UI pré-stylés pour Tailwind
+-   **eslint** + **eslint-config-prettier** _(dev)_ : linting et cohérence du code
+-   **prettier** _(dev)_ : formatage automatique
+-   **@vitejs/plugin-react** _(dev)_ : intégration React avec Vite
+
+---
+
+### Installation et configuration
+
+1. Cloner le projet :
+```bash
+git clone https://github.com/locksy-securite/front-end.git
+cd front-end
+```
+
+2. Installer les dépendances :
+```bash
+npm install
+```
+
+3. Lancer le serveur de développement :
+```bash
+npm run dev
+```
+
+---
+
+### Scripts disponibles
+
+-   `npm run dev` → lance le serveur Vite en mode développement
+-   `npm run build` → construit l'application pour la production
+-   `npm run lint` → analyse le code avec ESLint
+-   `npm run preview` → prévisualise la version de production
+-   `npm run format` → reformate le code avec Prettier
+
+---
+
+### Structure du projet
+
+```
+front-end/
+├── .github/workflows       # pipelines CI/CD
+├── public/                 # ressources statiques
+├── src/
+│   ├── assets/             # images et icônes internes
+│   ├── App.jsx             # composant racine et routes
+│   ├── main.jsx            # point d'entrée React/Vite
+│   ├── App.css             # styles globaux (Tailwind/DaisyUI)
+│   └── index.css           # styles de main.jsx
+├── index.html              # template HTML principal
+├── eslint.config.js        # règles ESLint (qualité du code)
+├── .prettierrc             # règles Prettier (formatage)
+├── .prettierignore         # fichiers ignorés par Prettier
+├── package.json            # scripts et dépendances du projet
+└── vite.config.js          # configuration Vite
+```
