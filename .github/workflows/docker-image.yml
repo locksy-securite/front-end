@@ -24,9 +24,9 @@ jobs:
       # Construire l'image
       - name: Build Docker image
         run: |
-          docker build -t ghcr.io/<org>/<repo>/locksy-front:latest .
+          docker build -t ghcr.io/locksy-securite/front-end/locksy-front:latest .
 
       # Push de l'image
       - name: Push Docker image
         run: |
-          docker push ghcr.io/<org>/<repo>/locksy-front:latest
+          docker push ghcr.io/locksy-securite/front-end/locksy-front:latest
