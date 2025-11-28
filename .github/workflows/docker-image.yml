@@ -19,14 +19,14 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GHCR_PASSWORD }}
 
       # Construire l'image
       - name: Build Docker image
         run: |
-          docker build -t ghcr.io/<org>/<repo>/mon-image:latest .
+          docker build -t ghcr.io/<org>/<repo>/locksy-front:latest .
 
       # Push de l'image
       - name: Push Docker image
         run: |
-          docker push ghcr.io/<org>/<repo>/mon-image:latest
+          docker push ghcr.io/<org>/<repo>/locksy-front:latest
