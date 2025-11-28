@@ -14,6 +14,7 @@
     "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-query": "^5.90.11",
     "argon2-browser": "^1.18.0",
+    "argon2-wasm-pro": "^1.1.0",
     "axios": "^1.13.2",
     "daisyui": "^5.5.5",
     "react": "^19.2.0",
