@@ -1,34 +1,39 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import { ThemeProvider } from "./context/ThemeProvider"; // ton provider
+import ThemeSelector from "./components/ThemeSelector"; // ton dropdown DaisyUI
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <ThemeProvider>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-base-200">
+        {/* Title */}
+        <h1 className="text-3xl font-bold mb-4">Locksy • Test DaisyUI</h1>
+
+        {/* Theme selector */}
+        <ThemeSelector />
+
+        {/* DaisyUI components */}
+        <div className="card w-96 bg-base-100 shadow-xl mt-6">
+          <div className="card-body">
+            <h2 className="card-title">Composants DaisyUI</h2>
+
+            <input
+              type="email"
+              placeholder="Votre email"
+              className="input mb-4"
+            />
+
+            <button className="btn btn-primary mb-2">Bouton primaire</button>
+            <button className="btn btn-secondary mb-2">Bouton secondaire</button>
+            <button className="btn btn-accent mb-2">Bouton accent</button>
+
+            <div className="alert alert-info mt-4">
+              <span>Message d'information (test DaisyUI)</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </ThemeProvider>
   )
 }
 
