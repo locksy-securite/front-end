@@ -3,7 +3,7 @@
 
 @plugin "daisyui/theme" {
   name: 'light';
-  default: false;
+  default: true;
   prefersdark: false;
   color-scheme: 'light';
   --color-base-100: rgb(255 255 255);
