@@ -4,10 +4,10 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeProvider';
 import { CryptoProvider } from './context/CryptoProvider.jsx';
 import { ToastProvider } from './context/ToastProvider.jsx';
-import ThemeSelector from './components/ThemeSelector';
 
 import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
+import HomePage from './pages/HomePage'; // <-- import
 
 function App() {
     return (
@@ -16,21 +16,7 @@ function App() {
                 <ToastProvider>
                     <BrowserRouter>
                         <Routes>
-                            <Route
-                                path="/"
-                                element={
-                                    <div className="flex flex-col items-center mt-10">
-                                        <h1 className="text-3xl font-bold mb-4">
-                                            Locksy
-                                        </h1>
-                                        <p className="text-base-content/70">
-                                            Bienvenue sur Locksy. Utilisez le
-                                            menu pour naviguer.
-                                        </p>
-                                        <ThemeSelector />
-                                    </div>
-                                }
-                            />
+                            <Route path="/" element={<HomePage />} />
                             <Route
                                 path="/register"
                                 element={<RegisterPage />}
