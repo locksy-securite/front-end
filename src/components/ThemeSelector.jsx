@@ -11,7 +11,7 @@ export default function ThemeSelector() {
     };
 
     return (
-        <div className="dropdown">
+        <div className="dropdown dropdown-end">
             <label tabIndex={0} className="btn btn-secondary m-1">
                 Thème • {themeLabels[theme]}
             </label>
