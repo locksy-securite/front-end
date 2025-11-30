@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import EmailInput from '../components/EmailInput';
 import PasswordInput from '../components/PasswordInput';
@@ -26,6 +27,7 @@ const ENVELOPE_META = {
 };
 
 export default function RegisterForm({ onToast }) {
+    const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -164,6 +166,7 @@ export default function RegisterForm({ onToast }) {
                 'success',
                 'Compte créé avec succès. Vous pouvez vous connecter.'
             );
+            navigate('/login');
         } catch (err) {
             console.error('Registration error:', err?.message || err);
             const errorMsg =
@@ -208,7 +211,7 @@ export default function RegisterForm({ onToast }) {
         >
             <h2 className="text-2xl font-bold text-center">Créer un compte</h2>
             <EmailInput value={email} onChange={setEmail} />
-            <PasswordInput value={password} onChange={setPassword} />
+            <PasswordInput value={password} onChange={setPassword} validate />
             {renderStrength()}
             <div className="text-sm text-base-content/70">
                 <p>
@@ -221,7 +224,11 @@ export default function RegisterForm({ onToast }) {
                 className="btn btn-primary w-full"
                 disabled={loading}
             >
-                {loading ? 'Création...' : 'Créer un compte'}
+                {loading ? (
+                    <span className="loading loading-ring loading-sm text-primary"></span>
+                ) : (
+                    'Créer un compte'
+                )}
             </button>
             <div className="divider" />
             <div className="text-xs text-base-content/60">

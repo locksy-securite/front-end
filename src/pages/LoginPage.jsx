@@ -1,8 +1,8 @@
-import RegisterForm from '../components/RegisterForm';
+import LoginForm from '../components/LoginForm';
 import { useToast } from '../hooks/useToast';
 import { Link } from 'react-router-dom';
 
-export default function RegisterPage() {
+export default function LoginPage() {
     const { addToast } = useToast();
 
     return (
@@ -17,14 +17,14 @@ export default function RegisterPage() {
                 <h1 className="text-3xl font-semibold text-center">Locksy</h1>
             </div>
 
-            {/* Formulaire d'inscription */}
-            <RegisterForm onToast={addToast} />
+            {/* Formulaire de connexion */}
+            <LoginForm onToast={addToast} />
 
             {/* Texte de bas de formulaire */}
             <p className="text-sm text-base-content/70">
-                Déjà un compte ?{' '}
-                <Link to="/login" className="link link-primary underline-offset-4">
-                    Se connecter
+                Pas de compte ?{' '}
+                <Link to="/register" className="link link-primary underline-offset-4">
+                    S'inscrire
                 </Link>
             </p>
         </div>
