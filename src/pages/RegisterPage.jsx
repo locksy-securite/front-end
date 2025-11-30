@@ -8,14 +8,17 @@ export default function RegisterPage() {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-base-200 space-y-12 p-6">
             {/* Logo Locksy */}
-            <div className="flex flex-col items-center justify-center space-y-3">
+            <Link
+                to="/"
+                className="flex flex-col items-center justify-center space-y-3"
+            >
                 <img
                     src="/logo_locksy.png"
                     alt="Locksy Logo"
                     className="w-12 h-12"
                 />
                 <h1 className="text-3xl font-semibold text-center">Locksy</h1>
-            </div>
+            </Link>
 
             {/* Formulaire d'inscription */}
             <RegisterForm onToast={addToast} />
@@ -23,7 +26,10 @@ export default function RegisterPage() {
             {/* Texte de bas de formulaire */}
             <p className="text-sm text-base-content/70">
                 Déjà un compte ?{' '}
-                <Link to="/login" className="link link-primary underline-offset-4">
+                <Link
+                    to="/login"
+                    className="link link-primary underline-offset-4"
+                >
                     Se connecter
                 </Link>
             </p>

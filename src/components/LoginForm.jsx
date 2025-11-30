@@ -163,11 +163,15 @@ export default function LoginForm({ onToast }) {
         >
             <h2 className="text-2xl font-bold text-center">Connexion</h2>
             <EmailInput value={email} onChange={setEmail} />
-            <PasswordInput value={password} onChange={setPassword} validate={false} />
+            <PasswordInput
+                value={password}
+                onChange={setPassword}
+                validate={false}
+            />
             <div className="text-sm text-base-content/70">
                 <p>
-                    Votre clé est dérivée de votre mot de passe sur votre
-                    appareil. Elle ne quitte jamais votre navigateur.
+                    Votre clé de chiffrement est dérivée de votre mot de passe
+                    sur votre appareil. Elle ne quitte jamais votre navigateur.
                 </p>
             </div>
             <button

@@ -233,7 +233,7 @@ export default function RegisterForm({ onToast }) {
             <div className="divider" />
             <div className="text-xs text-base-content/60">
                 <p>
-                    Conseil: utilisez une phrase de passe longue. En cas
+                    Conseil : utilisez une phrase de passe longue. En cas
                     d'oubli, les données chiffrées sont irrécupérables (modèle
                     zero-knowledge).
                 </p>
