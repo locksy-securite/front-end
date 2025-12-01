@@ -7,7 +7,7 @@ import { ToastProvider } from './context/ToastProvider.jsx';
 
 import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
-import HomePage from './pages/HomePage'; // <-- import
+import HomePage from './pages/HomePage';
 
 function App() {
     return (
