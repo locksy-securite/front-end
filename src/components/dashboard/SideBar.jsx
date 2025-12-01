@@ -15,7 +15,7 @@ export default function SideBar() {
                 {/* Bouton pour ouvrir le drawer sur mobile */}
                 <label
                     htmlFor="dashboard-drawer"
-                    className="btn btn-secondary drawer-button lg:hidden"
+                    className="btn btn-square btn-secondary drawer-button lg:hidden"
                     aria-label="Ouvrir le menu de navigation"
                 >
                     <svg
