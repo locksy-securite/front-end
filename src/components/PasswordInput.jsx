@@ -1,4 +1,9 @@
-export default function PasswordInput({ value, onChange, validate = true }) {
+export default function PasswordInput({
+    value,
+    onChange,
+    validate = true,
+    inputType = 'password',
+}) {
     return (
         <div className="form-control w-full">
             <label htmlFor="password" className="label">
@@ -6,7 +11,7 @@ export default function PasswordInput({ value, onChange, validate = true }) {
             </label>
             <input
                 id="password"
-                type="password"
+                type={inputType}
                 className="input validator w-full"
                 required
                 placeholder="********"
