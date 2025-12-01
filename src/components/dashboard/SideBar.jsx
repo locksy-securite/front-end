@@ -4,18 +4,18 @@ export default function SideBar() {
     const location = useLocation();
 
     return (
-        <div className="drawer lg:drawer-open">
+        <div className="drawer flex flex-col lg:drawer-open">
             {/* Toggle pour mobile */}
             <input
                 id="dashboard-drawer"
                 type="checkbox"
                 className="drawer-toggle"
             />
-            <div className="drawer-content">
+            <div className="drawer-content lg:hidden">
                 {/* Bouton pour ouvrir le drawer sur mobile */}
                 <label
                     htmlFor="dashboard-drawer"
-                    className="btn btn-secondary drawer-button lg:hidden m-1"
+                    className="btn btn-secondary drawer-button lg:hidden"
                     aria-label="Ouvrir le menu de navigation"
                 >
                     <img src="/menu.svg" alt="Icône menu" className="w-4 h-4" />
@@ -23,13 +23,13 @@ export default function SideBar() {
             </div>
 
             {/* Sidebar */}
-            <div className="drawer-side">
+            <div className="drawer-side lg:w-full">
                 <label
                     htmlFor="dashboard-drawer"
                     aria-label="Fermer le menu de navigation"
                     className="drawer-overlay"
                 ></label>
-                <ul className="menu bg-base-100 w-72 p-1 m-1 rounded-2xl space-y-1">
+                <ul className="menu bg-base-100 w-auto lg:w-full p-1 m-6 lg:m-0 rounded-2xl space-y-1 shadow-sm">
                     {/* Lien Mots de passe */}
                     <li>
                         <Link
