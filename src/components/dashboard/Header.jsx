@@ -4,7 +4,7 @@ import AccountDropdown from './AccountDropdown';
 
 export default function Header({ email, onLogout }) {
     return (
-        <header className="navbar bg-base-200 shadow-xs p-2 px-4">
+        <header className="navbar bg-base-200 p-2 px-4">
             {/* Logo Locksy */}
             <div className="flex-1 flex items-center space-x-3">
                 <Link
