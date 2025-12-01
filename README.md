@@ -47,6 +47,7 @@ Sur le plan **sécurité**, Locksy applique un modèle *zero-knowledge* :
 -   **argon2-browser** : dérivation de clé côté client (WASM)
 -   **argon2-wasm-pro** : alternative performante pour Argon2id
 -   **zxcvbn** : estimation de la force des mots de passe
+-   **dompurify** : sanitization des contenus HTML pour prévenir les attaques XSS
 -   **eslint** + **eslint-config-prettier** _(dev)_ : linting et cohérence du code
 -   **prettier** _(dev)_ : formatage automatique
 -   **@vitejs/plugin-react** _(dev)_ : intégration React avec Vite
@@ -96,16 +97,21 @@ front-end/
 │   │   ├── EmailInput.jsx          # champ email avec validation
 │   │   ├── PasswordInput.jsx       # champ mot de passe avec validation
 │   │   ├── RegisterForm.jsx        # formulaire d'inscription sécurisé
+│   │   ├── LoginForm.jsx           # formulaire de connexion sécurisé
 │   │   ├── ThemeSelector.jsx       # sélection du thème (UI)
-│   │   └── ToastAlert.jsx          # notifications utilisateur
+│   │   └── ToastAlert.jsx          # notifications utilisateur (sanitisées avec DOMPurify)
 │   ├── context/
-│   │   ├── cryptoContext.jsx       # contexte cryptographique
+│   │   ├── cryptoContext.js        # contexte cryptographique
 │   │   ├── CryptoProvider.jsx      # gestion centralisée des clés
-│   │   └── ThemeProvider.jsx       # gestion du thème
+│   │   ├── ThemeProvider.jsx       # gestion du thème
+│   │   └── ToastProvider.jsx       # gestion des notifications
 │   ├── hooks/
 │   │   ├── useCrypto.js            # hook pour accéder aux clés
-│   │   └── useTheme.js             # hook pour le thème
+│   │   ├── useTheme.js             # hook pour le thème
+│   │   └── useToast.js             # hook pour les notifications
 │   ├── pages/
+│   │   ├── HomePage.jsx            # page d'accueil
+│   │   ├── LoginPage.jsx           # page de connexion
 │   │   └── RegisterPage.jsx        # page d'inscription
 │   ├── utils/
 │   │   └── cryptoKeys.js           # utilitaires HKDF et dérivation
@@ -119,5 +125,6 @@ front-end/
 ├── .prettierrc             # règles Prettier (formatage)
 ├── .prettierignore         # fichiers ignorés par Prettier
 ├── package.json            # scripts et dépendances du projet
+├── package-lock.json       # verrouillage des versions exactes des dépendances
 └── vite.config.js          # configuration Vite
 ```
