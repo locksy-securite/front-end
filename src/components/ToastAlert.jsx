@@ -77,7 +77,7 @@ export default function ToastAlert({ type = 'info', message }) {
         <div className="toast toast-top toast-end">
             <div role="alert" className={`alert ${alertClassMap[type]}`}>
                 {icons[type]}
-                <span dangerouslySetInnerHTML={{ __html: safeMessage }} />
+                <span>{safeMessage}</span>
             </div>
         </div>
     );
