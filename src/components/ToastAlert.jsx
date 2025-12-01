@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify';
+
 export default function ToastAlert({ type = 'info', message }) {
     const icons = {
         success: (
@@ -69,11 +71,13 @@ export default function ToastAlert({ type = 'info', message }) {
         warning: 'alert-warning',
     };
 
+    const safeMessage = DOMPurify.sanitize(message, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+
     return (
         <div className="toast toast-top toast-end">
             <div role="alert" className={`alert ${alertClassMap[type]}`}>
                 {icons[type]}
-                <span>{message}</span>
+                <span dangerouslySetInnerHTML={{ __html: safeMessage }} />
             </div>
         </div>
     );
