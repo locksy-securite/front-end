@@ -122,3 +122,9 @@ TODO :
 /!\ Livrable technique :
 * Votre repository doit contenir un script npm run security (ou équivalent) fonctionnel.
 * Le projet final ne doit contenir aucune vulnérabilité critique non justifiée dans npm audit.
+
+### Autocritique - OWASP
+
+1. Injection : Les requêtes SQL ne sont pas concaténées, nous utilisons TypeORM partout.
+2. Authentification : Les mots de passes sont hachés avec bycrypt dans le front et le back, et nous limitons à 3 tentatives échouées.
+3. Composants vulnérabes : npm audit est vert. (cf partie sur le rapport d'audit)
