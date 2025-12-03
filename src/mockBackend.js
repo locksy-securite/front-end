@@ -1,6 +1,6 @@
 import axios from 'axios';
 import AxiosMockAdapter from 'axios-mock-adapter';
-import { api } from './lib/api'; // <-- ajout : mock aussi pour l'instance 'api'
+import { api } from './lib/api';
 
 // Helpers pour persister les comptes
 function loadUsers() {
@@ -32,14 +32,6 @@ function getMockSession() {
 // Utilitaire simple id
 function makeId() {
     return `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-}
-
-// Helpers pour persister les comptes
-function loadUsers() {
-    return JSON.parse(localStorage.getItem('mockUsers') || '{}');
-}
-function saveUsers(users) {
-    localStorage.setItem('mockUsers', JSON.stringify(users));
 }
 
 export default function setupMock() {
@@ -301,41 +293,6 @@ export default function setupMock() {
             404,
             { message: `Mock(api): no handler for ${config.url}` },
         ]);
-
-    // ---------------------------
-    // Mock récupération du salt
-    // ---------------------------
-    mock.onPost('/api/auth/salt').reply((config) => {
-        const { email } = JSON.parse(config.data);
-
-        if (!users[email]) {
-            return [404, { message: 'Mock: identifiants incorrects.' }];
-        }
-
-        return [200, { salt_b64: users[email].salt_b64 }];
-    });
-
-    // ---------------------------
-    // Mock connexion
-    // ---------------------------
-    mock.onPost('/api/auth/login').reply((config) => {
-        const { email, password_hash_b64 } = JSON.parse(config.data);
-
-        if (!users[email]) {
-            return [401, { message: 'Mock: identifiants incorrects.' }];
-        }
-
-        // Vérifier le hash
-        if (users[email].password_hash_b64 !== password_hash_b64) {
-            return [401, { message: 'Mock: identifiants incorrects.' }];
-        }
-
-        if (email === 'locked@test.com') {
-            return [403, { message: 'Mock: compte verrouillé.' }];
-        }
-
-        return [200, { message: 'Mock: connexion réussie.' }];
-    });
 
     return mock;
 }
