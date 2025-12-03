@@ -6,7 +6,7 @@ import axios from 'axios';
  * withCredentials doit être à true pour les endpoints de refresh/logout qui utilisent des cookies HttpOnly.
  */
 export const api = axios.create({
-    baseURL: '/api',
+    baseURL: import.meta.env.VITE_API_URL,
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
