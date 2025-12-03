@@ -63,7 +63,13 @@ cd front-end
 npm install
 ```
 
-3. Lancer le serveur de développement :
+3. Ajouter un fichier d'environnement `.env` (exemple) :
+```
+VITE_API_URL={API_URL}
+```
+- **VITE_API_URL** : URL de base utilisée par Axios pour communiquer avec le backend (/api en développement local)
+
+4. Lancer le serveur de développement :
 ```bash
 npm run dev
 ```
