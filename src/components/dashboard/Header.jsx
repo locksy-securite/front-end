@@ -24,7 +24,7 @@ export default function Header({ email, onLogout }) {
             {/* Actions à droite */}
             <div className="flex items-center space-x-2">
                 <ThemeSelector />
-                <AccountDropdown email={email} onLogout={onLogout} />
+                <AccountDropdown email={email || 'Utilisateur'} onLogout={onLogout} />
             </div>
         </header>
     );
