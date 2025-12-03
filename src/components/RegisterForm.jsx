@@ -6,8 +6,9 @@ import PasswordInput from '../components/PasswordInput';
 import argon2 from 'argon2-wasm-pro';
 import zxcvbn from 'zxcvbn';
 
-import { useCrypto } from '../hooks/useCrypto.js'; // Hook global CryptoProvider
-import { SUBKEYS, fromUtf8, deriveSubKey } from '../utils/cryptoKeys.js'; // Utilitaires centralisés
+import { useCrypto } from '../hooks/useCrypto.js';
+import { useAuth } from '../hooks/useAuth';
+import { SUBKEYS, fromUtf8, deriveSubKey } from '../utils/cryptoKeys.js';
 
 // Helpers sécurisés pour encodage
 const toBase64 = (bytes) => {
@@ -28,12 +29,13 @@ const ENVELOPE_META = {
 
 export default function RegisterForm({ onToast }) {
     const navigate = useNavigate();
+    const { setMasterKeyBytes, clearKeys } = useCrypto(); // accès au contexte crypto
+    const { login } = useAuth();
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState(null);
-
-    const { setMasterKeyBytes } = useCrypto(); // accès au contexte crypto
 
     // Vérification force du mot de passe avec zxcvbn
     useEffect(() => {
@@ -58,11 +60,11 @@ export default function RegisterForm({ onToast }) {
         let registrationPayload = null;
 
         try {
-            // Sel aléatoire pour Argon2id (16 octets)
+            // 1. Sel aléatoire pour Argon2id (16 octets)
             salt = new Uint8Array(16);
             crypto.getRandomValues(salt);
 
-            // Dérivation côté client (clé maître) — jamais envoyer le mot de passe brut
+            // 2. Dérivation côté client (clé maître) — jamais envoyer le mot de passe brut
             const { hash } = await argon2.hash({
                 pass: password,
                 salt,
@@ -77,14 +79,14 @@ export default function RegisterForm({ onToast }) {
             masterKeyBytes = new Uint8Array(hash);
             setMasterKeyBytes(masterKeyBytes); // stockée globalement dans CryptoProvider
 
-            // HKDF : dériver une sous-clé spécifique pour l'inscription directement avec masterKeyBytes
+            // 3. HKDF : dériver une sous-clé spécifique pour l'inscription
             registrationKeyBytes = await deriveSubKey(
                 masterKeyBytes,
                 SUBKEYS.registration,
                 32
             );
 
-            // Clé AES-GCM (256 bits) importée depuis la sous-clé HKDF
+            // 4. Chiffrement de la preuve d'inscription (AES-GCM)
             const cryptoKey = await crypto.subtle.importKey(
                 'raw',
                 registrationKeyBytes,
@@ -97,8 +99,7 @@ export default function RegisterForm({ onToast }) {
             nonce = new Uint8Array(12);
             crypto.getRandomValues(nonce);
 
-            // AAD enrichi pour lier le contexte cryptographique
-            const createdAt = Date.now(); // timestamp ms côté client
+            const createdAt = Date.now();
             const aadString = JSON.stringify({
                 v: ENVELOPE_META.version,
                 email,
@@ -122,18 +123,18 @@ export default function RegisterForm({ onToast }) {
                 registrationPayload
             );
 
-            // Enveloppe transportable (nonce + ciphertext en Base64)
+            // 5. Enveloppe transportable (nonce + ciphertext en Base64)
             const envelope = {
                 ...ENVELOPE_META,
-                salt_b64: toBase64(salt), // pour cohérence et audit côté serveur
-                aad_json: aadString, // utile au backend pour vérification/stockage
+                salt_b64: toBase64(salt),
+                aad_json: aadString,
                 data_b64: toBase64(
                     new Uint8Array([...nonce, ...new Uint8Array(ciphertext)])
                         .buffer
                 ),
             };
 
-            // Éléments envoyés au serveur (cohérents avec SQL)
+            // 6. Envoi au serveur (inscription)
             // - users.email : VARCHAR
             // - users.password_hash : BYTEA (convertir depuis Base64 côté serveur)
             // - users.salt : BYTEA (convertir depuis Base64 côté serveur)
@@ -144,37 +145,168 @@ export default function RegisterForm({ onToast }) {
                 envelope,
             });
 
-            // Wiping élargi des buffers sensibles
-            masterKeyBytes.fill(0);
-            registrationKeyBytes.fill(0);
-            salt.fill(0);
-            nonce.fill(0);
-            // Les buffers TextEncoder (aad, registrationPayload) sont immuables en JS,
-            // on les réinitialise en recréant des vues et en les remplissant si besoin
-            if (aad) {
-                const a = new Uint8Array(aad.buffer);
-                a.fill(0);
-            }
-            if (registrationPayload) {
-                const p = new Uint8Array(registrationPayload.buffer);
-                p.fill(0);
-            }
+            // 7. Auto-login : dériver sous-clé login, créer enveloppe login et appeler useAuth().login()
+            try {
+                // dériver sous-clé login
+                const loginKeyBytes = await deriveSubKey(
+                    masterKeyBytes,
+                    SUBKEYS.login,
+                    32
+                );
 
-            setEmail('');
-            setPassword('');
-            onToast?.(
-                'success',
-                'Compte créé avec succès. Vous pouvez vous connecter.'
-            );
-            navigate('/login');
+                const loginCryptoKey = await crypto.subtle.importKey(
+                    'raw',
+                    loginKeyBytes,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['encrypt']
+                );
+
+                const loginNonce = new Uint8Array(12);
+                crypto.getRandomValues(loginNonce);
+
+                const loginAadString = JSON.stringify({
+                    v: ENVELOPE_META.version,
+                    email,
+                    kdf: ENVELOPE_META.kdf,
+                    login_at: Date.now(),
+                });
+                const loginAad = fromUtf8(loginAadString);
+                const loginPayload = fromUtf8('login_proof_v1');
+
+                const loginCiphertext = await crypto.subtle.encrypt(
+                    {
+                        name: 'AES-GCM',
+                        iv: loginNonce,
+                        additionalData: loginAad,
+                        tagLength: ENVELOPE_META.encryption.tagBits,
+                    },
+                    loginCryptoKey,
+                    loginPayload
+                );
+
+                const loginEnvelope = {
+                    ...ENVELOPE_META,
+                    salt_b64: toBase64(salt),
+                    aad_json: loginAadString,
+                    data_b64: toBase64(
+                        new Uint8Array([
+                            ...loginNonce,
+                            ...new Uint8Array(loginCiphertext),
+                        ]).buffer
+                    ),
+                };
+
+                // Appel login via AuthProvider (serveur doit set cookie refresh + renvoyer accessToken)
+                await login({
+                    email,
+                    password_hash_b64: toBase64(masterKeyBytes),
+                    envelope: loginEnvelope,
+                });
+
+                onToast?.('success', 'Compte créé et connecté avec succès.');
+                // cleanup des buffers loginKey/nonce/payload
+                try {
+                    registrationKeyBytes && registrationKeyBytes.fill(0);
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                try {
+                    if (salt) salt.fill(0);
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                try {
+                    if (nonce) nonce.fill(0);
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                try {
+                    if (aad) {
+                        const a = new Uint8Array(aad.buffer);
+                        a.fill(0);
+                    }
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                try {
+                    if (registrationPayload) {
+                        const p = new Uint8Array(registrationPayload.buffer);
+                        p.fill(0);
+                    }
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                // redirection vers dashboard
+                navigate('/dashboard/passwords');
+            } catch {
+                // Si auto-login échoue, informer et rediriger vers /login (utilisateur peut se connecter manuellement)
+                onToast?.(
+                    'info',
+                    'Compte créé. Connexion automatique impossible — connectez-vous.'
+                );
+                navigate('/login');
+            } finally {
+                // Wiping élargi des buffers sensibles liés à l'inscription
+                try {
+                    registrationKeyBytes && registrationKeyBytes.fill(0);
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                try {
+                    if (salt) salt.fill(0);
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                try {
+                    if (nonce) nonce.fill(0);
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                try {
+                    if (aad) {
+                        const a = new Uint8Array(aad.buffer);
+                        a.fill(0);
+                    }
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+
+                try {
+                    if (registrationPayload) {
+                        const p = new Uint8Array(registrationPayload.buffer);
+                        p.fill(0);
+                    }
+                } catch {
+                    // Ignorer : nettoyage mémoire non critique
+                }
+            }
         } catch (err) {
             console.error('Registration error:', err?.message || err);
             const errorMsg =
                 err?.response?.data?.message ||
                 "Échec de l'inscription. Réessayez.";
             onToast?.('error', errorMsg);
+            // en cas d'erreur critique, effacer la clé maître globale si définie
+            try {
+                if (masterKeyBytes) {
+                    masterKeyBytes.fill(0);
+                }
+                clearKeys?.();
+            } catch {
+                // Ignorer : nettoyage mémoire non critique
+            }
+            // rester sur la page d'inscription
         } finally {
-            // Nettoyage des références
+            // Nettoyage des références locales
             masterKeyBytes = null;
             registrationKeyBytes = null;
             salt = null;
@@ -182,6 +314,8 @@ export default function RegisterForm({ onToast }) {
             aad = null;
             registrationPayload = null;
             setLoading(false);
+            setEmail('');
+            setPassword('');
         }
     };
 

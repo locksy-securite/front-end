@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import EmailInput from '../components/EmailInput';
 import PasswordInput from '../components/PasswordInput';
 import argon2 from 'argon2-wasm-pro';
 
 import { useCrypto } from '../hooks/useCrypto.js'; // Hook global CryptoProvider
+import { useAuth } from '../hooks/useAuth'; // hook d'auth
 import { SUBKEYS, fromUtf8, deriveSubKey } from '../utils/cryptoKeys.js'; // Utilitaires centralisés
 
 // Helpers sécurisés pour encodage
@@ -29,7 +31,9 @@ export default function LoginForm({ onToast }) {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const { setMasterKeyBytes } = useCrypto();
+    const { setMasterKeyBytes, clearKeys } = useCrypto();
+    const { login } = useAuth();
+    const navigate = useNavigate();
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -121,15 +125,15 @@ export default function LoginForm({ onToast }) {
                 ),
             };
 
-            // 7. Envoyer au serveur pour vérification
-            await axios.post('/api/auth/login', {
+            // 7. Envoyer au AuthProvider (qui fera /auth/login + gestion tokens)
+            await login({
                 email,
                 password_hash_b64: toBase64(masterKeyBytes),
                 envelope,
             });
 
-            // 8. Nettoyage
-            masterKeyBytes.fill(0);
+            // 8. Nettoyage local (on garde la masterKey en mémoire côté CryptoProvider,
+            //  car elle servira à déchiffrer les données pendant la session)
             loginKeyBytes.fill(0);
             salt.fill(0);
             nonce.fill(0);
@@ -139,7 +143,20 @@ export default function LoginForm({ onToast }) {
             setEmail('');
             setPassword('');
             onToast?.('success', 'Connexion réussie. Bienvenue dans Locksy.');
+            navigate('/dashboard/passwords');
         } catch (err) {
+            // En cas d'erreur, on essaie d'effacer la clé maître et autres buffers
+            try {
+                if (masterKeyBytes) {
+                    masterKeyBytes.fill(0);
+                }
+                // efface la clé maître globale stockée dans CryptoProvider
+                clearKeys?.();
+            } catch {
+                // rien d’autre à faire
+            }
+
+            // journaliser et afficher toast
             console.error('Login error:', err?.message || err);
             const errorMsg =
                 err?.response?.data?.message ||
@@ -180,7 +197,7 @@ export default function LoginForm({ onToast }) {
                 disabled={loading}
             >
                 {loading ? (
-                    <span className="loading loading-ring loading-sm text-primary"></span>
+                    <span className="loading loading-ring loading-sm text-primary" />
                 ) : (
                     'Se connecter'
                 )}
