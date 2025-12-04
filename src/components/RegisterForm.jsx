@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../lib/api';
 import EmailInput from '../components/EmailInput';
 import PasswordInput from '../components/PasswordInput';
 import argon2 from 'argon2-wasm-pro';
@@ -9,6 +9,7 @@ import zxcvbn from 'zxcvbn';
 import { useCrypto } from '../hooks/useCrypto.js';
 import { useAuth } from '../hooks/useAuth';
 import { SUBKEYS, fromUtf8, deriveSubKey } from '../utils/cryptoKeys.js';
+import { checkPwnedCount } from '../utils/pwned.js';
 
 // Helpers sécurisés pour encodage
 const toBase64 = (bytes) => {
@@ -58,6 +59,48 @@ export default function RegisterForm({ onToast }) {
         let nonce = null;
         let aad = null;
         let registrationPayload = null;
+
+        const HIBP_BLOCK_ON_PWNED = true;
+        
+        const withTimeout = (promise, ms = 5000) =>
+            Promise.race([
+                promise,
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('timeout')), ms)
+                ),
+            ]);
+
+        // Vérification HaveIBeenPwned
+        try {
+            // Timeout de 5 secondes maximum
+            const pwnedCount = await withTimeout(checkPwnedCount(password), 5000);
+
+            if (pwnedCount > 0) {
+                // Message clair pour l’utilisateur
+                const msg = `Ce mot de passe apparaît ${pwnedCount.toLocaleString()} fois dans des fuites connues. Veuillez en choisir un autre.`;
+
+                if (HIBP_BLOCK_ON_PWNED) {
+                    // Refus : mot de passe compromis
+                    onToast?.('error', msg);
+                    setLoading(false);
+                    return;
+                } else {
+                    // Politique permissive : avertir mais autoriser (optionnel)
+                    onToast?.('warning', msg);
+                }
+            }
+        } catch (hibpErr) {
+            /// Erreur réseau / API / timeout : on informe, mais on autorise l'inscription
+            console.warn(
+                'Échec de la vérification HIBP — procédure ignorée.',
+                hibpErr
+            );
+
+            onToast?.(
+                'info',
+                'Impossible de vérifier si le mot de passe figure dans des fuites — vérification ignorée.'
+            );
+        }
 
         try {
             // 1. Sel aléatoire pour Argon2id (16 octets)
@@ -138,7 +181,7 @@ export default function RegisterForm({ onToast }) {
             // - users.email : VARCHAR
             // - users.password_hash : BYTEA (convertir depuis Base64 côté serveur)
             // - users.salt : BYTEA (convertir depuis Base64 côté serveur)
-            await axios.post('/api/auth/register', {
+            await api.post('/auth/register', {
                 email,
                 password_hash_b64: toBase64(masterKeyBytes), // le "verifier" dérivé, pas le mot de passe
                 salt_b64: toBase64(salt),

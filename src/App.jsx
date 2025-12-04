@@ -49,9 +49,7 @@ function App() {
                                     />
                                     <Route
                                         path="/dashboard"
-                                        element={
-                                            <RequireAuth />
-                                        }
+                                        element={<RequireAuth />}
                                     >
                                         <Route
                                             index
@@ -66,6 +64,7 @@ function App() {
                                             path="passwords"
                                             element={<PasswordsPage />}
                                         />
+                                        <Route path="password-generator" />
                                     </Route>
                                     <Route
                                         path="*"

@@ -117,6 +117,11 @@ Locksy repose sur un modèle **zero‑knowledge** : le serveur ne connaît jamai
     À l’inscription, la robustesse des mots de passe est évaluée avec zxcvbn.  
     L’utilisateur est encouragé à choisir une phrase longue et complexe, avec un retour en temps réel sur la force et des conseils d’amélioration.
 
+-   **Vérification contre les fuites (HaveIBeenPwned)**  
+    À l’inscription, Locksy interroge HaveIBeenPwned en mode k‑anonymity.  
+    Seul un préfixe du hash SHA‑1 est transmis, garantissant la confidentialité.  
+    Si le mot de passe figure dans des fuites connues, l’utilisateur est averti ou bloqué afin d’éviter toute réutilisation compromise.
+
 ---
 
 ### Structure du projet

@@ -2,13 +2,17 @@ import axios from 'axios';
 
 /**
  * Instance Axios utilisée par l'application.
- * L'en-tête Authorization n'est pas défini ici (il sera ajouté par un interceptor avec l'accessToken en mémoire).
- * withCredentials doit être à true pour les endpoints de refresh/logout qui utilisent des cookies HttpOnly.
+ * baseURL est pris depuis VITE_API_URL (fallback sur '/api' si non défini).
+ * withCredentials true pour permettre les endpoints de refresh/logout qui utilisent des cookies HttpOnly.
  */
+const baseURL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
+
 export const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,
+    baseURL,
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
+
+export default api;

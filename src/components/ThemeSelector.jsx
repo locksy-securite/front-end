@@ -3,7 +3,43 @@ import { useTheme } from '../hooks/useTheme';
 export default function ThemeSelector() {
     const { theme, changeTheme } = useTheme();
 
-    // Mapping des valeurs vers libellés
+    // Icônes SVG pour chaque thème
+    const icons = {
+        system: (
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                className="w-5 h-5"
+                fill="currentColor"
+                aria-hidden="true"
+            >
+                <path d="M23,11H19.938a7.956,7.956,0,0,0-.575-2.129l2.655-1.546A1,1,0,0,0,21.012,5.6L18.354,7.145a8.1,8.1,0,0,0-1.507-1.5l1.541-2.648a1,1,0,0,0-1.729-1.006L15.12,4.633A7.971,7.971,0,0,0,13,4.062V1a1,1,0,0,0-2,0V4.062a7.965,7.965,0,0,0-2.108.566L7.355,1.986A1,1,0,1,0,5.627,2.992L7.163,5.633A8.046,8.046,0,0,0,5.651,7.139L3,5.6A1,1,0,0,0,2,7.325L4.64,8.865A7.955,7.955,0,0,0,4.062,11H1a1,1,0,0,0,0,2H4.062a7.957,7.957,0,0,0,.576,2.129L2,16.662A1,1,0,0,0,3.01,18.391l2.637-1.535a8.083,8.083,0,0,0,1.5,1.5L5.6,21A1,1,0,0,0,7.33,22.007l1.538-2.646A7.943,7.943,0,0,0,11,19.938V23a1,1,0,0,0,2,0V19.938a7.934,7.934,0,0,0,2.143-.582l1.543,2.651A1,1,0,0,0,18.414,21l-1.546-2.657a8.076,8.076,0,0,0,1.49-1.494l2.647,1.541a1,1,0,0,0,1.006-1.729l-2.646-1.54A7.941,7.941,0,0,0,19.938,13H23A1,1,0,0,0,23,11ZM12,18C4.356,17.906,3.792,6.32,12,6,19.929,6.252,19.928,17.749,12,18Zm1.455-2.229C7.889,17.5,5.64,9.3,11.361,8.051a4.393,4.393,0,0,1,1.683.068.544.544,0,0,1,.243.918,3.7,3.7,0,0,0,.319,5.793A.545.545,0,0,1,13.455,15.771Z" />
+            </svg>
+        ),
+        light: (
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                className="w-5 h-5"
+                fill="currentColor"
+                aria-hidden="true"
+            >
+                <path d="M12,17c-2.76,0-5-2.24-5-5s2.24-5,5-5,5,2.24,5,5-2.24,5-5,5Zm0-8c-1.65,0-3,1.35-3,3s1.35,3,3,3,3-1.35,3-3-1.35-3-3-3Zm1-5V1c0-.55-.45-1-1-1s-1,.45-1,1v3c0,.55,.45,1,1,1s1-.45,1-1Zm0,19v-3c0-.55-.45-1-1-1s-1,.45-1,1v3c0,.55,.45,1,1,1s1-.45,1-1ZM5,12c0-.55-.45-1-1-1H1c-.55,0-1,.45-1,1s.45,1,1,1h3c.55,0,1-.45,1-1Zm19,0c0-.55-.45-1-1-1h-3c-.55,0-1,.45-1,1s.45,1,1,1h3c.55,0,1-.45,1-1ZM6.71,6.71c.39-.39,.39-1.02,0-1.41l-2-2c-.39-.39-1.02-.39-1.41,0s-.39,1.02,0,1.41l2,2c.2,.2,.45,.29,.71,.29s.51-.1,.71-.29Zm14,14c.39-.39,.39-1.02,0-1.41l-2-2c-.39-.39-1.02-.39-1.41,0s-.39,1.02,0,1.41l2,2c.2,.2,.45,.29,.71,.29s.51-.1,.71-.29Zm-16,0l2-2c.39-.39,.39-1.02,0-1.41s-1.02-.39-1.41,0l-2,2c-.39,.39-.39,1.02,0,1.41,.2,.2,.45,.29,.71,.29s.51-.1,.71-.29ZM18.71,6.71l2-2c.39-.39,.39-1.02,0-1.41s-1.02-.39-1.41,0l-2,2c-.39,.39-.39,1.02,0,1.41,.2,.2,.45,.29,.71,.29s.51-.1,.71-.29Z" />
+            </svg>
+        ),
+        dark: (
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                className="w-5 h-5"
+                fill="currentColor"
+                aria-hidden="true"
+            >
+                <path d="M15,24a12.021,12.021,0,0,1-8.914-3.966,11.9,11.9,0,0,1-3.02-9.309A12.122,12.122,0,0,1,13.085.152a13.061,13.061,0,0,1,5.031.205,2.5,2.5,0,0,1,1.108,4.226c-4.56,4.166-4.164,10.644.807,14.41a2.5,2.5,0,0,1-.7,4.32A13.894,13.894,0,0,1,15,24Zm.076-22a10.793,10.793,0,0,0-1.677.127,10.093,10.093,0,0,0-8.344,8.8A9.927,9.927,0,0,0,7.572,18.7,10.476,10.476,0,0,0,18.664,21.43a.5.5,0,0,0,.139-.857c-5.929-4.478-6.4-12.486-.948-17.449a.459.459,0,0,0,.128-.466.49.49,0,0,0-.356-.361A10.657,10.657,0,0,0,15.076,2Z" />
+            </svg>
+        ),
+    };
+
     const themeLabels = {
         system: 'Défaut système',
         light: 'Clair',
@@ -12,23 +48,37 @@ export default function ThemeSelector() {
 
     return (
         <div className="dropdown dropdown-end">
-            <label tabIndex={0} className="btn btn-secondary m-1">
-                Thème • {themeLabels[theme]}
-            </label>
-            <ul
+            {/* Bouton principal */}
+            <div
                 tabIndex={0}
-                className="dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-1 shadow-sm"
+                role="button"
+                aria-label={`Menu sélection du thème (actuel : ${themeLabels[theme]})`}
+                className="btn btn-circle btn-secondary m-1 flex items-center justify-center"
             >
-                <li>
-                    <button onClick={() => changeTheme('system')}>Défaut système</button>
-                </li>
-                <li>
-                    <button onClick={() => changeTheme('light')}>Clair</button>
-                </li>
-                <li>
-                    <button onClick={() => changeTheme('dark')}>Sombre</button>
-                </li>
-            </ul>
+                {icons[theme]}
+            </div>
+
+            {/* Contenu du dropdown */}
+            <div
+                tabIndex={-1}
+                className="dropdown-content bg-base-100 rounded-box z-10 w-52 shadow-sm"
+            >
+                <ul className="menu w-full p-1" role="menu">
+                    {Object.entries(themeLabels).map(([key, label]) => (
+                        <li key={key} role="menuitem">
+                            <button
+                                onClick={() => changeTheme(key)}
+                                className="flex items-center gap-2"
+                                aria-label={`Activer le thème ${label}`}
+                                aria-pressed={theme === key}
+                            >
+                                {icons[key]}
+                                <span>{label}</span>
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            </div>
         </div>
     );
 }
