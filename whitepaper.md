@@ -123,6 +123,8 @@ Nous utilisons **Argon2id** côté client comme KDF pour dériver la clé maîtr
 
 Un estimateur de force (**zxcvbn**) est intégré côté client afin d’encourager l’utilisation de passphrases longues et robustes.
 
+Un contrôle supplémentaire via **HaveIBeenPwned (HIBP)** est effectué pour détecter si le mot de passe apparaît dans des fuites publiques. En cas de résultat positif, l’utilisateur est invité (ou contraint, selon la politique) à choisir un mot de passe inédit.
+
 Les paramètres choisis (`memoryCost = 65 536`, `timeCost = 3`, `parallelism = 1`) représentent un compromis optimal :
 - **Sécurité** : ils ralentissent fortement les attaques hors-ligne, en particulier celles menées avec GPU ou ASIC.
 - **Performance** : ils restent suffisamment rapides pour garantir une expérience fluide dans le navigateur.
