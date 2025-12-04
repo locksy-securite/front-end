@@ -4,10 +4,15 @@ import { useToast } from '../hooks/useToast';
 import { useCrypto } from '../hooks/useCrypto';
 import { AuthContext } from './authContext.js';
 
-// file d’attente pour les requêtes pendant un refresh
+// Variables globales pour gérer le refresh
 let isRefreshing = false;
 let refreshQueue = [];
 
+/**
+ * Vide la file d’attente des requêtes en attente de refresh.
+ * Si une erreur est passée, toutes les promesses sont rejetées.
+ * Sinon, elles sont résolues avec le nouveau token.
+ */
 const processQueue = (error, token = null) => {
     refreshQueue.forEach(({ resolve, reject }) => {
         if (error) reject(error);
@@ -16,15 +21,34 @@ const processQueue = (error, token = null) => {
     refreshQueue = [];
 };
 
+/**
+ * Détecte si une URL correspond à une route d’authentification
+ * (login ou refresh). Gère les URLs relatives et absolues.
+ */
+const isAuthRoute = (url) => {
+    if (!url) return false;
+    try {
+        const u = new URL(url, api.defaults.baseURL);
+        return (
+            u.pathname.includes('/auth/refresh') ||
+            u.pathname.includes('/auth/login')
+        );
+    } catch {
+        return url.includes('/auth/refresh') || url.includes('/auth/login');
+    }
+};
+
 export function AuthProvider({ children }) {
     const { addToast } = useToast();
     const crypto = useCrypto();
-    const [accessToken, setAccessToken] = useState(null); // en mémoire
+
+    const [accessToken, setAccessToken] = useState(null); // token en mémoire
     const [user, setUser] = useState(null);
     const [initializing, setInitializing] = useState(true);
 
-    // interceptor requêtes : ajoute Authorization depuis la mémoire
+    // Interceptors Axios
     useEffect(() => {
+        // Ajoute le token Authorization à chaque requête sortante
         const reqInterceptor = api.interceptors.request.use(
             (config) => {
                 if (accessToken && config.headers) {
@@ -35,23 +59,27 @@ export function AuthProvider({ children }) {
             (err) => Promise.reject(err)
         );
 
+        // Gère les erreurs 401 et tente un refresh
         const resInterceptor = api.interceptors.response.use(
             (res) => res,
             async (err) => {
-                const originalRequest = err.config;
-                // gérer uniquement les 401 hors refresh/login/logout
+                const originalRequest = err?.config;
+                if (!originalRequest) return Promise.reject(err);
+
+                const is401 = err?.response?.status === 401;
+
                 if (
-                    err.response &&
-                    err.response.status === 401 &&
+                    is401 &&
                     !originalRequest._retry &&
-                    !originalRequest.url?.includes('/auth/refresh') &&
-                    !originalRequest.url?.includes('/auth/login')
+                    !isAuthRoute(originalRequest.url)
                 ) {
                     if (isRefreshing) {
-                        // mettre en file d’attente jusqu’à la fin du refresh
+                        // Mettre en file d’attente jusqu’à la fin du refresh
                         return new Promise((resolve, reject) => {
                             refreshQueue.push({
                                 resolve: (token) => {
+                                    originalRequest.headers =
+                                        originalRequest.headers || {};
                                     originalRequest.headers.Authorization = `Bearer ${token}`;
                                     resolve(api(originalRequest));
                                 },
@@ -62,19 +90,24 @@ export function AuthProvider({ children }) {
 
                     originalRequest._retry = true;
                     isRefreshing = true;
+
                     try {
                         const { data } = await api.post('/auth/refresh'); // cookie envoyé automatiquement
-                        const newToken = data?.accessToken;
-                        setAccessToken(newToken || null);
+                        const newToken = data?.accessToken || null;
+
+                        setAccessToken(newToken);
                         processQueue(null, newToken);
                         isRefreshing = false;
-                        // relancer la requête avec le nouveau token
+
+                        // Relancer la requête avec le nouveau token
+                        originalRequest.headers = originalRequest.headers || {};
                         originalRequest.headers.Authorization = `Bearer ${newToken}`;
                         return api(originalRequest);
                     } catch (refreshErr) {
                         isRefreshing = false;
                         processQueue(refreshErr, null);
-                        // dernier recours : vider la session côté client
+
+                        // Dernier recours : vider la session côté client
                         setAccessToken(null);
                         setUser(null);
                         crypto?.clearKeys?.();
@@ -82,51 +115,62 @@ export function AuthProvider({ children }) {
                             'error',
                             'Session expirée. Veuillez vous reconnecter.'
                         );
+
                         return Promise.reject(refreshErr);
                     }
                 }
+
                 return Promise.reject(err);
             }
         );
 
+        // Nettoyage des interceptors au démontage
         return () => {
             api.interceptors.request.eject(reqInterceptor);
             api.interceptors.response.eject(resInterceptor);
         };
     }, [accessToken, addToast, crypto]);
 
-    // au montage : tentative de refresh silencieux pour restaurer la session
+    // Initialisation : tentative de refresh silencieux
     useEffect(() => {
         let mounted = true;
         (async () => {
             try {
                 const { data } = await api.post('/auth/refresh'); // utilise le cookie
                 if (!mounted) return;
+
                 if (data?.accessToken) {
                     setAccessToken(data.accessToken);
-                    // optionnel : le serveur peut renvoyer l’utilisateur
-                    if (data.user) setUser(data.user);
+                    if (data.user) setUser(data.user); // optionnel
                 }
             } catch {
-                // pas de refresh possible -> reste déconnecté
+                // Pas de refresh possible -> reste déconnecté
             } finally {
                 if (mounted) setInitializing(false);
             }
         })();
+
         return () => {
             mounted = false;
         };
     }, []);
 
-    const login = useCallback(async (loginPayload) => {
-        // loginPayload construit par LoginForm
-        const res = await api.post('/auth/login', loginPayload);
-        // serveur doit poser le cookie refresh et renvoyer accessToken + user
-        const token = res.data?.accessToken;
-        setAccessToken(token || null);
-        setUser(res.data?.user || null);
-        return res.data;
-    }, []);
+    // Actions
+    const login = useCallback(
+        async (loginPayload) => {
+            try {
+                const res = await api.post('/auth/login', loginPayload);
+                const token = res.data?.accessToken || null;
+                setAccessToken(token);
+                setUser(res.data?.user || null);
+                return res.data;
+            } catch (err) {
+                addToast?.('error', 'Échec de la connexion.');
+                throw err;
+            }
+        },
+        [addToast]
+    );
 
     const logout = useCallback(async () => {
         try {
@@ -141,6 +185,7 @@ export function AuthProvider({ children }) {
         }
     }, [addToast, crypto]);
 
+    // Valeurs exposées au contexte
     const value = {
         accessToken,
         setAccessToken, // rarement utilisé directement

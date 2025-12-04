@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import axios from 'axios';
+import { api } from '../../lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PasswordsList from '../../components/dashboard/PasswordsList';
 import { useToast } from '../../hooks/useToast';
@@ -176,7 +176,7 @@ export default function PasswordsPage() {
             return [];
         }
         try {
-            const res = await axios.get('/passwords');
+            const res = await api.get('/passwords');
             const list = Array.isArray(res.data) ? res.data : [];
 
             const decrypted = await Promise.all(
@@ -250,10 +250,10 @@ export default function PasswordsPage() {
             };
 
             if (payload.id_password) {
-                await axios.put(`/passwords/${payload.id_password}`, body);
+                await api.put(`/passwords/${payload.id_password}`, body);
                 return { mode: 'update', id: payload.id_password };
             }
-            await axios.post('/passwords', body);
+            await api.post('/passwords', body);
             return { mode: 'create' };
         },
         onSuccess: (data, variables) => {
@@ -274,7 +274,7 @@ export default function PasswordsPage() {
 
     const deleteMutation = useMutation({
         mutationFn: async (id) => {
-            await axios.delete(`/passwords/${id}`);
+            await api.delete(`/passwords/${id}`);
             return id;
         },
         onSuccess: () => {

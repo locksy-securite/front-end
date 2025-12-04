@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../lib/api';
 import EmailInput from '../components/EmailInput';
 import PasswordInput from '../components/PasswordInput';
 import argon2 from 'argon2-wasm-pro';
@@ -181,7 +181,7 @@ export default function RegisterForm({ onToast }) {
             // - users.email : VARCHAR
             // - users.password_hash : BYTEA (convertir depuis Base64 côté serveur)
             // - users.salt : BYTEA (convertir depuis Base64 côté serveur)
-            await axios.post('/api/auth/register', {
+            await api.post('/auth/register', {
                 email,
                 password_hash_b64: toBase64(masterKeyBytes), // le "verifier" dérivé, pas le mot de passe
                 salt_b64: toBase64(salt),

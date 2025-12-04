@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../lib/api';
 import EmailInput from '../components/EmailInput';
 import PasswordInput from '../components/PasswordInput';
 import argon2 from 'argon2-wasm-pro';
@@ -48,7 +48,7 @@ export default function LoginForm({ onToast }) {
 
         try {
             // 1. Récupérer le sel côté serveur (lié à l’utilisateur)
-            const { data: serverData } = await axios.post('/api/auth/salt', {
+            const { data: serverData } = await api.post('/auth/salt', {
                 email,
             });
             salt = Uint8Array.from(atob(serverData.salt_b64), (c) =>
