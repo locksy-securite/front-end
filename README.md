@@ -8,12 +8,6 @@ La partie **frontend** de l'application Locksy est développée en **React** ave
 
 Elle offre une interface moderne et intuitive grâce à **TailwindCSS** et **DaisyUI**, tout en intégrant des bonnes pratiques de développement (ESLint, Prettier, React Query, Axios).
 
-Sur le plan **sécurité**, Locksy applique un modèle *zero-knowledge* :  
-- Les données sensibles sont **chiffrées côté client** avec **AES-GCM**.  
-- Les clés sont dérivées via **Argon2id** et ne quittent jamais le navigateur.  
-- La structure de stockage est versionnée et auto-descriptive, garantissant une compatibilité future.  
-- La force des mots de passe est évaluée avec **zxcvbn** pour inciter à l’usage de passphrases robustes. 
-
 ---
 
 ### Table des matières
@@ -22,6 +16,7 @@ Sur le plan **sécurité**, Locksy applique un modèle *zero-knowledge* :
 -   [Dépendances principales](#dépendances-principales)
 -   [Installation et configuration](#installation-et-configuration)
 -   [Scripts disponibles](#scripts-disponibles)
+-   [Sécurité et modèle zero knowledge](#sécurité-et-modèle-zero-knowledge)
 -   [Structure du projet](#structure-du-projet)
 
 ---
@@ -68,7 +63,13 @@ cd front-end
 npm install
 ```
 
-3. Lancer le serveur de développement :
+3. Ajouter un fichier d'environnement `.env` (exemple) :
+```
+VITE_API_URL={API_URL}
+```
+- **VITE_API_URL** : URL de base utilisée par Axios pour communiquer avec le backend (/api en développement local)
+
+4. Lancer le serveur de développement :
 ```bash
 npm run dev
 ```
@@ -85,46 +86,97 @@ npm run dev
 
 ---
 
+### Sécurité et modèle zero knowledge
+
+Locksy repose sur un modèle **zero‑knowledge** : le serveur ne connaît jamais les clés ni les secrets, et toutes les opérations cryptographiques sont réalisées directement dans le navigateur.
+
+-   **Chiffrement côté client (AES‑256‑GCM)**  
+    Les données sensibles sont chiffrées localement avec AES‑256‑GCM.  
+    Chaque élément utilise un nonce aléatoire et des métadonnées (AAD) pour assurer confidentialité, intégrité et protection contre les attaques par rejouabilité.  
+    Le serveur ne stocke que le ciphertext et les métadonnées, jamais les clés.
+    
+-   **Dérivation des clés (Argon2id)**  
+    La clé maître est dérivée du mot de passe utilisateur via Argon2id en WebAssembly, avec un sel unique fourni à l’inscription.  
+    Elle reste uniquement en mémoire côté client et n’est jamais transmise.  
+    Ce mécanisme rend les attaques par dictionnaire ou par GPU/ASIC beaucoup plus coûteuses.
+    
+-   **Sous‑clés indépendantes (HKDF)**  
+    À partir de la clé maître, Locksy dérive plusieurs sous‑clés spécifiques (connexion, coffre de mots de passe, notes, etc.).  
+    Chaque sous‑clé est isolée : un compromis n’affecte pas les autres.  
+    Cela garantit un compartimentage cryptographique robuste.
+    
+-   **Enveloppes versionnées**  
+    Les données chiffrées sont encapsulées dans une enveloppe JSON décrivant la version, les algorithmes et les paramètres utilisés.  
+    Ce format auto‑descriptif assure la compatibilité future et permet de migrer vers de nouveaux algorithmes sans perte de données.
+    
+-   **Connexion zero‑knowledge**  
+    Lors du login, aucune donnée sensible n’est transmise.  
+    Le client prouve la possession de la clé maître en générant une enveloppe chiffrée minimale, que le serveur peut vérifier sans jamais connaître le mot de passe.
+    
+-   **Évaluation des passphrases (zxcvbn)**  
+    À l’inscription, la robustesse des mots de passe est évaluée avec zxcvbn.  
+    L’utilisateur est encouragé à choisir une phrase longue et complexe, avec un retour en temps réel sur la force et des conseils d’amélioration.
+
+---
+
 ### Structure du projet
 
 ```
 front-end/
-├── .github/workflows       # pipelines CI/CD
-├── public/                 # ressources statiques
+├── .github/workflows                   # pipelines CI/CD
+├── public/                             # ressources statiques
 ├── src/
-│   ├── assets/                     # images et icônes internes
+│   ├── assets/                         # images et icônes internes
 │   ├── components/
-│   │   ├── EmailInput.jsx          # champ email avec validation
-│   │   ├── PasswordInput.jsx       # champ mot de passe avec validation
-│   │   ├── RegisterForm.jsx        # formulaire d'inscription sécurisé
-│   │   ├── LoginForm.jsx           # formulaire de connexion sécurisé
-│   │   ├── ThemeSelector.jsx       # sélection du thème (UI)
-│   │   └── ToastAlert.jsx          # notifications utilisateur (sanitisées avec DOMPurify)
+│   │   ├── dashboard/
+│   │   │   ├── AccountDropdown.jsx     # menu utilisateur (profil, déconnexion)
+│   │   │   ├── Header.jsx              # barre supérieure du dashboard
+│   │   │   ├── PasswordRow.jsx         # ligne individuelle d’un mot de passe
+│   │   │   ├── PasswordList.jsx        # liste des mots de passe affichés et formulaire d'ajout / modification
+│   │   │   └── SideBar.jsx             # barre latérale de navigation
+│   │   ├── EmailInput.jsx              # champ email avec validation
+│   │   ├── PasswordInput.jsx           # champ mot de passe avec validation
+│   │   ├── TextInput.jsx               # champ texte générique
+│   │   ├── RegisterForm.jsx            # formulaire d'inscription sécurisé
+│   │   ├── LoginForm.jsx               # formulaire de connexion sécurisé
+│   │   ├── RequireAuth.jsx             # wrapper pour protéger les routes privées
+│   │   ├── ThemeSelector.jsx           # sélection du thème (UI)
+│   │   └── ToastAlert.jsx              # notifications utilisateur (sanitisées avec DOMPurify)
 │   ├── context/
-│   │   ├── cryptoContext.js        # contexte cryptographique
-│   │   ├── CryptoProvider.jsx      # gestion centralisée des clés
-│   │   ├── ThemeProvider.jsx       # gestion du thème
-│   │   └── ToastProvider.jsx       # gestion des notifications
+│   │   ├── authContext.js              # définition du contexte d'authentification
+│   │   ├── AuthProvider.jsx            # provider pour gérer l'état d'authentification
+│   │   ├── cryptoContext.js            # contexte cryptographique
+│   │   ├── CryptoProvider.jsx          # gestion centralisée des clés
+│   │   ├── ThemeProvider.jsx           # gestion du thème
+│   │   └── ToastProvider.jsx           # gestion des notifications
 │   ├── hooks/
-│   │   ├── useCrypto.js            # hook pour accéder aux clés
-│   │   ├── useTheme.js             # hook pour le thème
-│   │   └── useToast.js             # hook pour les notifications
+│   │   ├── useAuth.js                  # hook pour accéder au contexte d'authentification
+│   │   ├── useCrypto.js                # hook pour accéder aux clés
+│   │   ├── useTheme.js                 # hook pour le thème
+│   │   └── useToast.js                 # hook pour les notifications
+│   ├── layouts/
+│   │   └── DashboardLayout.jsx         # layout principal du dashboard (header + sidebar + contenu)
+│   ├── lib/
+│   │   └── api.js                      # wrapper pour les appels API (axios)
 │   ├── pages/
-│   │   ├── HomePage.jsx            # page d'accueil
-│   │   ├── LoginPage.jsx           # page de connexion
-│   │   └── RegisterPage.jsx        # page d'inscription
+│   │   ├── dashboard/
+│   │   │   └── PasswordsPage.jsx       # page listant et gérant les mots de passe
+│   │   ├── HomePage.jsx                # page d'accueil
+│   │   ├── LoginPage.jsx               # page de connexion
+│   │   └── RegisterPage.jsx            # page d'inscription
 │   ├── utils/
-│   │   └── cryptoKeys.js           # utilitaires HKDF et dérivation
-│   ├── App.jsx                     # composant racine et routes
-│   ├── main.jsx                    # point d'entrée React/Vite
-│   ├── App.css                     # styles globaux (Tailwind/DaisyUI)
-│   ├── index.css                   # styles de main.jsx
-│   └── mockBackend.js              # backend simulé pour tests
-├── index.html              # template HTML principal
-├── eslint.config.js        # règles ESLint (qualité du code)
-├── .prettierrc             # règles Prettier (formatage)
-├── .prettierignore         # fichiers ignorés par Prettier
-├── package.json            # scripts et dépendances du projet
-├── package-lock.json       # verrouillage des versions exactes des dépendances
-└── vite.config.js          # configuration Vite
+│   │   └── cryptoKeys.js               # utilitaires HKDF et dérivation
+│   ├── App.jsx                         # composant racine et routes
+│   ├── main.jsx                        # point d'entrée React/Vite
+│   ├── App.css                         # styles globaux (Tailwind/DaisyUI)
+│   ├── index.css                       # styles de main.jsx
+│   └── mockBackend.js                  # backend simulé pour tests
+├── .prettierrc                         # règles Prettier (formatage)
+├── .prettierignore                     # fichiers ignorés par Prettier
+├── Dockerfile                          # configuration Docker pour le déploiement
+├── eslint.config.js                    # règles ESLint (qualité du code)
+├── index.html                          # template HTML principal
+├── package.json                        # scripts et dépendances du projet
+├── package-lock.json                   # verrouillage des versions exactes des dépendances
+└── vite.config.js                      # configuration Vite
 ```
