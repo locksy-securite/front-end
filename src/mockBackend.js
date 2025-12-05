@@ -40,7 +40,7 @@ export default function setupMock() {
     const mockApi = new AxiosMockAdapter(api, { delayResponse: 400 });
 
     // Charger l’état depuis localStorage
-    let users = loadUsers(); // { email: { salt_b64, password_hash_b64 } }
+    let users = loadUsers(); // { email: { salt, passwordHash } }
 
     // small helpers
     const ok = (body = {}) => [200, body];
@@ -56,10 +56,10 @@ export default function setupMock() {
     //
     const registerHandler = (config) => {
         try {
-            const { email, password_hash_b64, salt_b64 } = JSON.parse(
+            const { email, passwordHash, salt } = JSON.parse(
                 config.data
             );
-            if (!email || !password_hash_b64 || !salt_b64) {
+            if (!email || !passwordHash || !salt) {
                 return badRequest("Données d'inscription incomplètes.");
             }
 
@@ -72,7 +72,7 @@ export default function setupMock() {
                 return badRequest('Mock: email déjà utilisé.');
             }
 
-            users[email] = { salt_b64, password_hash_b64 };
+            users[email] = { salt, passwordHash };
             saveUsers(users);
 
             return ok({ message: 'Mock: compte créé avec succès.' });
@@ -88,7 +88,7 @@ export default function setupMock() {
             if (!users[email]) {
                 return notFound('Mock: identifiants incorrects.');
             }
-            return ok({ salt_b64: users[email].salt_b64 });
+            return ok({ salt: users[email].salt });
         } catch {
             return serverError('Mock: payload invalide.');
         }
@@ -96,12 +96,12 @@ export default function setupMock() {
 
     const loginHandler = (config) => {
         try {
-            const { email, password_hash_b64 } = JSON.parse(config.data);
+            const { email, passwordHash } = JSON.parse(config.data);
             users = loadUsers();
             if (!users[email]) {
                 return unauthorized('Mock: identifiants incorrects.');
             }
-            if (users[email].password_hash_b64 !== password_hash_b64) {
+            if (users[email].passwordHash !== passwordHash) {
                 return unauthorized('Mock: identifiants incorrects.');
             }
             if (email === 'locked@test.com') {
