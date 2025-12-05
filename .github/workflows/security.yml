@@ -1,3 +1,5 @@
+# A chaque pull request sur la branche main ce workflow se déclanche pour vérifier la sécurité des dépendances Node.js du projet.
+
 name: Security Audit
 
 on:
@@ -5,20 +7,30 @@ on:
     branches: 
       - main
 
+# Le job audit s'exécute sur une machine virtuelle Ubuntu fournie par Github.
+
 jobs:
   audit:
     runs-on: ubuntu-latest
 
+# Récupère le code source du dépôt.
+
     steps:
       - uses: actions/checkout@v3
+
+# Prépare Node.js version 18 sur la machine.
 
       - name: Install Node
         uses: actions/setup-node@v3
         with:
           node-version: 18
+          
+# Installe toutes les dépendances comme le package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci # pour des installations propres et reductibles 
+
+# Vérifie que les dépendances n'ont pas de vulnérabilités critiques ou élevées.
 
       - name: Run npm audit
         run: npm audit --audit-level=high
