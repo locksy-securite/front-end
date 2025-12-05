@@ -51,7 +51,7 @@ export default function LoginForm({ onToast }) {
             const { data: serverData } = await api.post('/auth/salt', {
                 email,
             });
-            salt = Uint8Array.from(atob(serverData.salt_b64), (c) =>
+            salt = Uint8Array.from(atob(serverData.salt), (c) =>
                 c.charCodeAt(0)
             );
 
@@ -117,7 +117,7 @@ export default function LoginForm({ onToast }) {
             // Enveloppe transportable
             const envelope = {
                 ...ENVELOPE_META,
-                salt_b64: serverData.salt_b64,
+                salt: serverData.salt,
                 aad_json: aadString,
                 data_b64: toBase64(
                     new Uint8Array([...nonce, ...new Uint8Array(ciphertext)])
@@ -128,7 +128,7 @@ export default function LoginForm({ onToast }) {
             // 7. Envoyer au AuthProvider (qui fera /auth/login + gestion tokens)
             await login({
                 email,
-                password_hash_b64: toBase64(masterKeyBytes),
+                passwordHash: toBase64(masterKeyBytes),
                 envelope,
             });
 
