@@ -244,10 +244,10 @@ export default function setupMock() {
     mockApi.onPost('/api/auth/login').reply(loginHandler);
 
     // refresh
-    mock.onPost('/api/auth/refresh').reply(refreshHandler);
-    mock.onPost('/auth/refresh').reply(refreshHandler);
-    mockApi.onPost('/auth/refresh').reply(refreshHandler);
-    mockApi.onPost('/api/auth/refresh').reply(refreshHandler);
+    mock.onPost('/api/auth/refresh-token').reply(refreshHandler);
+    mock.onPost('/auth/refresh-token').reply(refreshHandler);
+    mockApi.onPost('/auth/refresh-token').reply(refreshHandler);
+    mockApi.onPost('/api/auth/refresh-token').reply(refreshHandler);
 
     // logout
     mock.onPost('/api/auth/logout').reply(logoutHandler);
