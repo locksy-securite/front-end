@@ -169,7 +169,7 @@ export default function RegisterForm({ onToast }) {
             // 5. Enveloppe transportable (nonce + ciphertext en Base64)
             const envelope = {
                 ...ENVELOPE_META,
-                salt_b64: toBase64(salt),
+                salt: toBase64(salt),
                 aad_json: aadString,
                 data_b64: toBase64(
                     new Uint8Array([...nonce, ...new Uint8Array(ciphertext)])
@@ -179,12 +179,12 @@ export default function RegisterForm({ onToast }) {
 
             // 6. Envoi au serveur (inscription)
             // - users.email : VARCHAR
-            // - users.password_hash : BYTEA (convertir depuis Base64 côté serveur)
+            // - users.passwordHash : BYTEA (convertir depuis Base64 côté serveur)
             // - users.salt : BYTEA (convertir depuis Base64 côté serveur)
             await api.post('/auth/register', {
                 email,
-                password_hash_b64: toBase64(masterKeyBytes), // le "verifier" dérivé, pas le mot de passe
-                salt_b64: toBase64(salt),
+                passwordHash: toBase64(masterKeyBytes), // le "verifier" dérivé, pas le mot de passe
+                salt: toBase64(salt),
                 envelope,
             });
 
@@ -230,7 +230,7 @@ export default function RegisterForm({ onToast }) {
 
                 const loginEnvelope = {
                     ...ENVELOPE_META,
-                    salt_b64: toBase64(salt),
+                    salt: toBase64(salt),
                     aad_json: loginAadString,
                     data_b64: toBase64(
                         new Uint8Array([
@@ -243,7 +243,7 @@ export default function RegisterForm({ onToast }) {
                 // Appel login via AuthProvider (serveur doit set cookie refresh + renvoyer accessToken)
                 await login({
                     email,
-                    password_hash_b64: toBase64(masterKeyBytes),
+                    passwordHash: toBase64(masterKeyBytes),
                     envelope: loginEnvelope,
                 });
 
