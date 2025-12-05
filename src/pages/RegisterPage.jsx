@@ -1,9 +1,24 @@
 import RegisterForm from '../components/RegisterForm';
 import { useToast } from '../hooks/useToast';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 export default function RegisterPage() {
     const { addToast } = useToast();
+    const { isAuthenticated, initializing } = useAuth();
+
+    if (initializing) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-base-200">
+                <div className="loading loading-ring"></div>
+            </div>
+        );
+    }
+
+    // Si déjà connecté, rediriger vers le dashboard
+    if (isAuthenticated) {
+        return <Navigate to="/dashboard/passwords" replace />;
+    }
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-base-200 space-y-12 p-6">
