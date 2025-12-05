@@ -18,7 +18,21 @@ function savePasswordsFor(email, list) {
     localStorage.setItem(`mockPasswords:${email}`, JSON.stringify(list));
 }
 
-// Session helper (simule cookie refresh côté mock via localStorage)
+// Token stores (access & refresh)
+function loadAccessTokens() {
+    return JSON.parse(localStorage.getItem('mockAccessTokens') || '{}'); // { token: email }
+}
+function saveAccessTokens(map) {
+    localStorage.setItem('mockAccessTokens', JSON.stringify(map));
+}
+function loadRefreshTokens() {
+    return JSON.parse(localStorage.getItem('mockRefreshTokens') || '{}'); // { token: email }
+}
+function saveRefreshTokens(map) {
+    localStorage.setItem('mockRefreshTokens', JSON.stringify(map));
+}
+
+// Session helper (compatibilité / fallback)
 function setMockSession(email) {
     localStorage.setItem('mockSession', email);
 }
@@ -34,6 +48,40 @@ function makeId() {
     return `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
+// Récupère l'email à partir du header Authorization: Bearer <accessToken>
+function getEmailFromAuthConfig(config) {
+    try {
+        const headers = config.headers || {};
+        const auth =
+            headers.Authorization ||
+            headers.authorization ||
+            headers['Authorization'] ||
+            null;
+        if (!auth) return null;
+        const parts = String(auth).split(' ');
+        if (parts.length !== 2) return null;
+        const token = parts[1];
+        const accessTokens = loadAccessTokens();
+        return accessTokens[token] || null;
+    } catch {
+        return null;
+    }
+}
+
+// Supprime tous les access tokens associés à un email
+function removeAccessTokensForEmail(email) {
+    const accessTokens = loadAccessTokens();
+    let changed = false;
+    for (const t of Object.keys(accessTokens)) {
+        if (accessTokens[t] === email) {
+            delete accessTokens[t];
+            changed = true;
+        }
+    }
+    if (changed) saveAccessTokens(accessTokens);
+}
+
+// Attacher le mock
 export default function setupMock() {
     // two adapters: one for default axios, one for the api instance
     const mock = new AxiosMockAdapter(axios, { delayResponse: 400 });
@@ -54,11 +102,10 @@ export default function setupMock() {
     //
     // Handlers (single implementation, attached to both adapters)
     //
+
     const registerHandler = (config) => {
         try {
-            const { email, passwordHash, salt } = JSON.parse(
-                config.data
-            );
+            const { email, passwordHash, salt } = JSON.parse(config.data);
             if (!email || !passwordHash || !salt) {
                 return badRequest("Données d'inscription incomplètes.");
             }
@@ -108,14 +155,27 @@ export default function setupMock() {
                 return forbidden('Mock: compte verrouillé.');
             }
 
-            // créer "session" côté mock et renvoyer accessToken + user
-            setMockSession(email);
-            const accessToken = `mock-access-${email}-${Math.floor(Math.random() * 100000)}`;
+            // créer tokens côté mock et renvoyer accessToken + refreshToken + user
+            const accessTokens = loadAccessTokens();
+            const refreshTokens = loadRefreshTokens();
+
+            const accessToken = `mock-access-${makeId()}`;
+            const refreshToken = `mock-refresh-${makeId()}`;
             const user = { email };
+
+            accessTokens[accessToken] = email;
+            refreshTokens[refreshToken] = email;
+
+            saveAccessTokens(accessTokens);
+            saveRefreshTokens(refreshTokens);
+
+            // compatibilité: conserver mockSession (certains anciens handlers pouvaient s'appuyer dessus)
+            setMockSession(email);
 
             return ok({
                 message: 'Mock: connexion réussie.',
                 accessToken,
+                refreshToken,
                 user,
             });
         } catch {
@@ -123,28 +183,101 @@ export default function setupMock() {
         }
     };
 
-    const refreshHandler = () => {
-        const email = getMockSession();
-        if (!email) return unauthorized('No session');
-        const accessToken = `mock-access-${email}-${Math.floor(Math.random() * 100000)}`;
-        const user = { email };
-        return ok({ accessToken, user });
+    const refreshHandler = (config) => {
+        try {
+            // accepter { refreshToken } dans le body
+            const body = config.data ? JSON.parse(config.data) : {};
+            const incomingRefresh = body?.refreshToken;
+            if (!incomingRefresh) {
+                return unauthorized('No refreshToken provided.');
+            }
+
+            const refreshTokens = loadRefreshTokens();
+            const email = refreshTokens[incomingRefresh];
+
+            if (!email) {
+                // token inconnu / invalide
+                return unauthorized('Invalid refresh token.');
+            }
+
+            // rotation: supprimer l'ancien refresh token et en créer un nouveau
+            delete refreshTokens[incomingRefresh];
+            const newRefresh = `mock-refresh-${makeId()}`;
+            refreshTokens[newRefresh] = email;
+            saveRefreshTokens(refreshTokens);
+
+            // créer un nouvel access token
+            const accessTokens = loadAccessTokens();
+            const newAccess = `mock-access-${makeId()}`;
+            accessTokens[newAccess] = email;
+            saveAccessTokens(accessTokens);
+
+            // mise à jour de la session (compatibilité)
+            setMockSession(email);
+
+            const user = { email };
+            return ok({
+                accessToken: newAccess,
+                refreshToken: newRefresh,
+                user,
+            });
+        } catch {
+            return serverError('Mock: payload invalide.');
+        }
     };
 
-    const logoutHandler = () => {
-        clearMockSession();
-        return ok({ message: 'Mock: déconnecté.' });
+    const logoutHandler = (config) => {
+        try {
+            // Attendre { refreshToken } dans le body
+            const body = config.data ? JSON.parse(config.data) : {};
+            const incomingRefresh = body?.refreshToken;
+
+            if (incomingRefresh) {
+                const refreshTokens = loadRefreshTokens();
+                const email = refreshTokens[incomingRefresh];
+                if (email) {
+                    // supprimer le refresh token côté serveur (mock)
+                    delete refreshTokens[incomingRefresh];
+                    saveRefreshTokens(refreshTokens);
+
+                    // supprimer aussi les access tokens pour cet email
+                    removeAccessTokensForEmail(email);
+                }
+            } else {
+                // fallback : si pas de refreshToken fourni, on se contente de clearMockSession
+                const email = getMockSession();
+                if (email) {
+                    removeAccessTokensForEmail(email);
+
+                    // supprimer tous les refresh tokens pointant vers cet email (nettoyage)
+                    const refreshTokens = loadRefreshTokens();
+                    let changed = false;
+                    for (const t of Object.keys(refreshTokens)) {
+                        if (refreshTokens[t] === email) {
+                            delete refreshTokens[t];
+                            changed = true;
+                        }
+                    }
+                    if (changed) saveRefreshTokens(refreshTokens);
+                }
+            }
+
+            clearMockSession();
+            return ok({ message: 'Mock: déconnecté.' });
+        } catch {
+            return serverError('Mock: payload invalide.');
+        }
     };
 
-    const getPasswordsHandler = () => {
-        const email = getMockSession();
+    const getPasswordsHandler = (config) => {
+        const email = getEmailFromAuthConfig(config) || getMockSession();
         if (!email) return unauthorized('Not authenticated (mock).');
         const list = loadPasswordsFor(email);
         return ok(list);
     };
 
     const postPasswordsHandler = (config) => {
-        const email = getMockSession();
+        const email = getEmailFromAuthConfig(config) || getMockSession();
         if (!email) return unauthorized('Not authenticated (mock).');
         try {
             const payload = JSON.parse(config.data);
@@ -169,7 +302,7 @@ export default function setupMock() {
     };
 
     const putPasswordsHandler = (config) => {
-        const email = getMockSession();
+        const email = getEmailFromAuthConfig(config) || getMockSession();
         if (!email) return unauthorized('Not authenticated (mock).');
         try {
             const url = config.url || '';
@@ -199,7 +332,7 @@ export default function setupMock() {
     };
 
     const deletePasswordsHandler = (config) => {
-        const email = getMockSession();
+        const email = getEmailFromAuthConfig(config) || getMockSession();
         if (!email) return unauthorized('Not authenticated (mock).');
         try {
             const url = config.url || '';
@@ -252,7 +385,7 @@ export default function setupMock() {
     // logout
     mock.onPost('/api/auth/logout').reply(logoutHandler);
     mock.onPost('/auth/logout').reply(logoutHandler);
-    mockApi.onPost('/auth/logout').reply(logoutHandler);
+    mockApi.onPost('/api/auth/logout').reply(logoutHandler);
     mockApi.onPost('/api/auth/logout').reply(logoutHandler);
 
     // passwords
