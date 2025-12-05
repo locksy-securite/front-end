@@ -30,11 +30,11 @@ const isAuthRoute = (url) => {
     try {
         const u = new URL(url, api.defaults.baseURL);
         return (
-            u.pathname.includes('/auth/refresh') ||
+            u.pathname.includes('/auth/refresh-token') ||
             u.pathname.includes('/auth/login')
         );
     } catch {
-        return url.includes('/auth/refresh') || url.includes('/auth/login');
+        return url.includes('/auth/refresh-token') || url.includes('/auth/login');
     }
 };
 
@@ -92,7 +92,7 @@ export function AuthProvider({ children }) {
                     isRefreshing = true;
 
                     try {
-                        const { data } = await api.post('/auth/refresh'); // cookie envoyé automatiquement
+                        const { data } = await api.post('/auth/refresh-token'); // cookie envoyé automatiquement
                         const newToken = data?.accessToken || null;
 
                         setAccessToken(newToken);
@@ -136,7 +136,7 @@ export function AuthProvider({ children }) {
         let mounted = true;
         (async () => {
             try {
-                const { data } = await api.post('/auth/refresh'); // utilise le cookie
+                const { data } = await api.post('/auth/refresh-token'); // utilise le cookie
                 if (!mounted) return;
 
                 if (data?.accessToken) {
