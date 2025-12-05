@@ -170,7 +170,8 @@ front-end/
 │   │   ├── LoginPage.jsx               # page de connexion
 │   │   └── RegisterPage.jsx            # page d'inscription
 │   ├── utils/
-│   │   └── cryptoKeys.js               # utilitaires HKDF et dérivation
+│   │   ├── cryptoKeys.js               # utilitaires HKDF et dérivation
+│   │   └── pwned.js                    # vérification des mots de passe via l’API HIBP (k-anonymity)
 │   ├── App.jsx                         # composant racine et routes
 │   ├── main.jsx                        # point d'entrée React/Vite
 │   ├── App.css                         # styles globaux (Tailwind/DaisyUI)
