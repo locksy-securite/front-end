@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import EmailInput from '../components/EmailInput';
@@ -20,11 +20,110 @@ const toBase64 = (bytes) => {
     return window.btoa(binary);
 };
 
+const base64ToUint8 = (b64) =>
+    Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
 const ENVELOPE_META = {
     version: 1,
     kdf: { alg: 'argon2id', params: { m: 65536, t: 3, p: 1, hashLen: 32 } },
     encryption: { alg: 'aes-256-gcm', tagBits: 128 },
 };
+
+const wipe = (buf) => {
+    try {
+        if (buf && typeof buf.fill === 'function') buf.fill(0);
+    } catch {
+        // best-effort
+    }
+};
+
+async function deriveMasterKey(password, saltUint8) {
+    const { hash } = await argon2.hash({
+        pass: password,
+        salt: saltUint8,
+        type: 'argon2id',
+        memoryCost: ENVELOPE_META.kdf.params.m,
+        timeCost: ENVELOPE_META.kdf.params.t,
+        parallelism: ENVELOPE_META.kdf.params.p,
+        hashLen: ENVELOPE_META.kdf.params.hashLen,
+    });
+
+    return new Uint8Array(hash);
+}
+
+async function encryptWithSubkey(
+    masterKeyBytes,
+    subkeyLabel,
+    aadObj,
+    payloadStr,
+    saltB64
+) {
+    const subkey = await deriveSubKey(masterKeyBytes, subkeyLabel, 32);
+
+    const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        subkey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt']
+    );
+
+    // 4. IV/nonce aléatoire (12 octets) pour GCM
+    //    Généré côté client et préfixé au ciphertext pour que le serveur puisse le réutiliser au déchiffrement.
+    const nonce = new Uint8Array(12);
+    crypto.getRandomValues(nonce);
+
+    // 5. AAD (contexte)
+    //    "Additional Authenticated Data" : données non chiffrées mais couvertes par la tag d'authentification.
+    //    On inclut la version, l'email, les paramètres KDF et la date de login afin d'éviter le replay et
+    //    d'attacher le contexte à la preuve.
+    const aadString = JSON.stringify(aadObj);
+    const aad = fromUtf8(aadString);
+
+    // 6. Payload minimal
+    //    Preuve minimale (par exemple 'login_proof_v1') encodée en bytes et chiffrée avec AES-GCM.
+    const payload = fromUtf8(payloadStr);
+
+    try {
+        const ciphertext = await crypto.subtle.encrypt(
+            {
+                name: 'AES-GCM',
+                iv: nonce,
+                additionalData: aad,
+                tagLength: ENVELOPE_META.encryption.tagBits,
+            },
+            cryptoKey,
+            payload
+        );
+
+        const dataB64 = toBase64(
+            new Uint8Array([...nonce, ...new Uint8Array(ciphertext)]).buffer
+        );
+
+        return {
+            ...ENVELOPE_META,
+            salt: saltB64,
+            aad_json: aadString,
+            data_b64: dataB64,
+        };
+    } finally {
+        wipe(subkey);
+        wipe(nonce);
+        if (aad)
+            try {
+                new Uint8Array(aad.buffer).fill(0);
+            } catch {
+                // best-effort
+            }
+
+        if (payload)
+            try {
+                new Uint8Array(payload.buffer).fill(0);
+            } catch {
+                // best-effort
+            }
+    }
+}
 
 export default function LoginForm({ onToast }) {
     const [email, setEmail] = useState('');
@@ -35,143 +134,90 @@ export default function LoginForm({ onToast }) {
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const handleLogin = async (e) => {
-        e.preventDefault();
-        setLoading(true);
+    const handleLogin = useCallback(
+        async (e) => {
+            e.preventDefault();
+            setLoading(true);
 
-        let salt = null;
-        let masterKeyBytes = null;
-        let loginKeyBytes = null;
-        let nonce = null;
-        let aad = null;
-        let loginPayload = null;
+            let salt = null;
+            let masterKeyBytes = null;
 
-        try {
-            // 1. Récupérer le sel côté serveur (lié à l’utilisateur)
-            const { data: serverData } = await api.post('/auth/salt', {
-                email,
-            });
-            salt = Uint8Array.from(atob(serverData.salt_b64), (c) =>
-                c.charCodeAt(0)
-            );
-
-            // 2. Dériver la clé maître avec Argon2id
-            const { hash } = await argon2.hash({
-                pass: password,
-                salt,
-                type: 'argon2id',
-                memoryCost: ENVELOPE_META.kdf.params.m,
-                timeCost: ENVELOPE_META.kdf.params.t,
-                parallelism: ENVELOPE_META.kdf.params.p,
-                hashLen: ENVELOPE_META.kdf.params.hashLen,
-            });
-
-            // Clé maître issue d'Argon2id
-            masterKeyBytes = new Uint8Array(hash);
-            setMasterKeyBytes(masterKeyBytes); // stockée globalement dans CryptoProvider
-
-            // 3. HKDF : dériver une sous-clé spécifique pour la connexion directement avec masterKeyBytes
-            loginKeyBytes = await deriveSubKey(
-                masterKeyBytes,
-                SUBKEYS.login,
-                32
-            );
-
-            // Clé AES-GCM (256 bits) importée depuis la sous-clé HKDF
-            const cryptoKey = await crypto.subtle.importKey(
-                'raw',
-                loginKeyBytes,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt']
-            );
-
-            // 4. IV/nonce aléatoire (12 octets) pour GCM
-            nonce = new Uint8Array(12);
-            crypto.getRandomValues(nonce);
-
-            // 5. AAD (contexte)
-            const aadString = JSON.stringify({
-                v: ENVELOPE_META.version,
-                email,
-                kdf: ENVELOPE_META.kdf,
-                login_at: Date.now(),
-            });
-            aad = fromUtf8(aadString);
-
-            // 6. Payload minimal de connexion
-            loginPayload = fromUtf8('login_proof_v1');
-
-            // Chiffrement authentifié (AES-GCM)
-            const ciphertext = await crypto.subtle.encrypt(
-                {
-                    name: 'AES-GCM',
-                    iv: nonce,
-                    additionalData: aad,
-                    tagLength: ENVELOPE_META.encryption.tagBits,
-                },
-                cryptoKey,
-                loginPayload
-            );
-
-            // Enveloppe transportable
-            const envelope = {
-                ...ENVELOPE_META,
-                salt_b64: serverData.salt_b64,
-                aad_json: aadString,
-                data_b64: toBase64(
-                    new Uint8Array([...nonce, ...new Uint8Array(ciphertext)])
-                        .buffer
-                ),
-            };
-
-            // 7. Envoyer au AuthProvider (qui fera /auth/login + gestion tokens)
-            await login({
-                email,
-                password_hash_b64: toBase64(masterKeyBytes),
-                envelope,
-            });
-
-            // 8. Nettoyage local (on garde la masterKey en mémoire côté CryptoProvider,
-            //  car elle servira à déchiffrer les données pendant la session)
-            loginKeyBytes.fill(0);
-            salt.fill(0);
-            nonce.fill(0);
-            if (aad) new Uint8Array(aad.buffer).fill(0);
-            if (loginPayload) new Uint8Array(loginPayload.buffer).fill(0);
-
-            setEmail('');
-            setPassword('');
-            onToast?.('success', 'Connexion réussie. Bienvenue dans Locksy.');
-            navigate('/dashboard/passwords');
-        } catch (err) {
-            // En cas d'erreur, on essaie d'effacer la clé maître et autres buffers
             try {
-                if (masterKeyBytes) {
-                    masterKeyBytes.fill(0);
-                }
-                // efface la clé maître globale stockée dans CryptoProvider
-                clearKeys?.();
-            } catch {
-                // rien d’autre à faire
-            }
+                // 1. Récupérer le sel côté serveur (lié à l’utilisateur)
+                const { data: serverData } = await api.post('/auth/salt', {
+                    email,
+                });
+                salt = base64ToUint8(serverData.salt);
 
-            // journaliser et afficher toast
-            console.error('Login error:', err?.message || err);
-            const errorMsg =
-                err?.response?.data?.message ||
-                'Échec de la connexion. Vérifiez vos identifiants.';
-            onToast?.('error', errorMsg);
-        } finally {
-            masterKeyBytes = null;
-            loginKeyBytes = null;
-            salt = null;
-            nonce = null;
-            aad = null;
-            loginPayload = null;
-            setLoading(false);
-        }
-    };
+                // 2. Dériver la clé maître avec Argon2id
+                masterKeyBytes = await deriveMasterKey(password, salt);
+                setMasterKeyBytes(masterKeyBytes); // stockée globalement dans CryptoProvider
+
+                // 3. HKDF : dériver une sous-clé spécifique pour la connexion et chiffrer la preuve
+                const aadObj = {
+                    v: ENVELOPE_META.version,
+                    email,
+                    kdf: ENVELOPE_META.kdf,
+                    login_at: Date.now(),
+                };
+
+                // 4/5/6. Générer nonce, préparer AAD et payload, chiffrer avec sous-clé (AES-GCM)
+                const envelope = await encryptWithSubkey(
+                    masterKeyBytes,
+                    SUBKEYS.login,
+                    aadObj,
+                    'login_proof_v1',
+                    serverData.salt
+                );
+
+                // 7. Envoyer au AuthProvider (qui fera /auth/login + gestion tokens)
+                await login({
+                    email,
+                    passwordHash: toBase64(masterKeyBytes),
+                    envelope,
+                });
+
+                // 8. Nettoyage local (on garde la masterKey en mémoire côté CryptoProvider)
+                wipe(masterKeyBytes);
+                wipe(salt);
+
+                setEmail('');
+                setPassword('');
+                
+                onToast?.(
+                    'success',
+                    'Connexion réussie. Bienvenue dans Locksy.'
+                );
+                navigate('/dashboard/passwords');
+            } catch (err) {
+                try {
+                    if (masterKeyBytes) wipe(masterKeyBytes);
+                    clearKeys?.();
+                } catch {
+                    // best-effort
+                }
+
+                console.error('Login error:', err?.message || err);
+                const errorMsg =
+                    err?.response?.data?.message ||
+                    'Échec de la connexion. Vérifiez vos identifiants.';
+                onToast?.('error', errorMsg);
+            } finally {
+                masterKeyBytes = null;
+                salt = null;
+                setLoading(false);
+            }
+        },
+        [
+            email,
+            password,
+            setMasterKeyBytes,
+            clearKeys,
+            login,
+            navigate,
+            onToast,
+        ]
+    );
 
     return (
         <form

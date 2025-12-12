@@ -128,60 +128,64 @@ Locksy repose sur un modèle **zero‑knowledge** : le serveur ne connaît jamai
 
 ```
 front-end/
-├── .github/workflows                   # pipelines CI/CD
-├── public/                             # ressources statiques
+├── .github/workflows                       # pipelines CI/CD
+├── public/                                 # ressources statiques
 ├── src/
-│   ├── assets/                         # images et icônes internes
+│   ├── assets/                             # images et icônes internes
 │   ├── components/
 │   │   ├── dashboard/
-│   │   │   ├── AccountDropdown.jsx     # menu utilisateur (profil, déconnexion)
-│   │   │   ├── Header.jsx              # barre supérieure du dashboard
-│   │   │   ├── PasswordRow.jsx         # ligne individuelle d’un mot de passe
-│   │   │   ├── PasswordList.jsx        # liste des mots de passe affichés et formulaire d'ajout / modification
-│   │   │   └── SideBar.jsx             # barre latérale de navigation
-│   │   ├── EmailInput.jsx              # champ email avec validation
-│   │   ├── PasswordInput.jsx           # champ mot de passe avec validation
-│   │   ├── TextInput.jsx               # champ texte générique
-│   │   ├── RegisterForm.jsx            # formulaire d'inscription sécurisé
-│   │   ├── LoginForm.jsx               # formulaire de connexion sécurisé
-│   │   ├── RequireAuth.jsx             # wrapper pour protéger les routes privées
-│   │   ├── ThemeSelector.jsx           # sélection du thème (UI)
-│   │   └── ToastAlert.jsx              # notifications utilisateur (sanitisées avec DOMPurify)
+│   │   │   ├── AccountDropdown.jsx         # menu utilisateur (profil, déconnexion)
+│   │   │   ├── Header.jsx                  # barre supérieure du dashboard
+│   │   │   ├── PasswordRow.jsx             # ligne individuelle d’un mot de passe
+│   │   │   ├── PasswordList.jsx            # liste des mots de passe affichés et formulaire d'ajout / modification
+│   │   │   └── SideBar.jsx                 # barre latérale de navigation
+│   │   ├── EmailInput.jsx                  # champ email avec validation
+│   │   ├── LoginForm.jsx                   # formulaire de connexion sécurisé
+│   │   ├── PasswordInput.jsx               # champ mot de passe avec validation
+│   │   ├── RangeSlider.jsx                 # curseur de sélection numérique
+│   │   ├── RegisterForm.jsx                # formulaire d'inscription sécurisé
+│   │   ├── RequireAuth.jsx                 # wrapper pour protéger les routes privées
+│   │   ├── TextInput.jsx                   # champ texte générique
+│   │   ├── ThemeSelector.jsx               # sélection du thème (UI)
+│   │   ├── ToastAlert.jsx                  # notifications utilisateur (sanitisées avec DOMPurify)
+│   │   └── Toggle.jsx                      # interrupteur activé/désactivé
 │   ├── context/
-│   │   ├── authContext.js              # définition du contexte d'authentification
-│   │   ├── AuthProvider.jsx            # provider pour gérer l'état d'authentification
-│   │   ├── cryptoContext.js            # contexte cryptographique
-│   │   ├── CryptoProvider.jsx          # gestion centralisée des clés
-│   │   ├── ThemeProvider.jsx           # gestion du thème
-│   │   └── ToastProvider.jsx           # gestion des notifications
+│   │   ├── authContext.js                  # définition du contexte d'authentification
+│   │   ├── AuthProvider.jsx                # provider pour gérer l'état d'authentification
+│   │   ├── cryptoContext.js                # contexte cryptographique
+│   │   ├── CryptoProvider.jsx              # gestion centralisée des clés
+│   │   ├── ThemeProvider.jsx               # gestion du thème
+│   │   └── ToastProvider.jsx               # gestion des notifications
 │   ├── hooks/
-│   │   ├── useAuth.js                  # hook pour accéder au contexte d'authentification
-│   │   ├── useCrypto.js                # hook pour accéder aux clés
-│   │   ├── useTheme.js                 # hook pour le thème
-│   │   └── useToast.js                 # hook pour les notifications
+│   │   ├── useAuth.js                      # hook pour accéder au contexte d'authentification
+│   │   ├── useCrypto.js                    # hook pour accéder aux clés
+│   │   ├── useTheme.js                     # hook pour le thème
+│   │   └── useToast.js                     # hook pour les notifications
 │   ├── layouts/
-│   │   └── DashboardLayout.jsx         # layout principal du dashboard (header + sidebar + contenu)
+│   │   └── DashboardLayout.jsx             # layout principal du dashboard (header + sidebar + contenu)
 │   ├── lib/
-│   │   └── api.js                      # wrapper pour les appels API (axios)
+│   │   └── api.js                          # wrapper pour les appels API (axios)
 │   ├── pages/
 │   │   ├── dashboard/
-│   │   │   └── PasswordsPage.jsx       # page listant et gérant les mots de passe
-│   │   ├── HomePage.jsx                # page d'accueil
-│   │   ├── LoginPage.jsx               # page de connexion
-│   │   └── RegisterPage.jsx            # page d'inscription
+│   │   │   ├── PasswordGeneratorPage.jsx   # page pour générer des mots de passe sécurisés avec options
+│   │   │   └── PasswordsPage.jsx           # page listant et gérant les mots de passe
+│   │   ├── HomePage.jsx                    # page d'accueil
+│   │   ├── LoginPage.jsx                   # page de connexion
+│   │   └── RegisterPage.jsx                # page d'inscription
 │   ├── utils/
-│   │   └── cryptoKeys.js               # utilitaires HKDF et dérivation
-│   ├── App.jsx                         # composant racine et routes
-│   ├── main.jsx                        # point d'entrée React/Vite
-│   ├── App.css                         # styles globaux (Tailwind/DaisyUI)
-│   ├── index.css                       # styles de main.jsx
-│   └── mockBackend.js                  # backend simulé pour tests
-├── .prettierrc                         # règles Prettier (formatage)
-├── .prettierignore                     # fichiers ignorés par Prettier
-├── Dockerfile                          # configuration Docker pour le déploiement
-├── eslint.config.js                    # règles ESLint (qualité du code)
-├── index.html                          # template HTML principal
-├── package.json                        # scripts et dépendances du projet
-├── package-lock.json                   # verrouillage des versions exactes des dépendances
-└── vite.config.js                      # configuration Vite
+│   │   ├── cryptoKeys.js                   # utilitaires HKDF et dérivation
+│   │   └── pwned.js                        # vérification des mots de passe via l’API HIBP (k-anonymity)
+│   ├── App.css                             # styles globaux (Tailwind/DaisyUI)
+│   ├── App.jsx                             # composant racine et routes
+│   ├── index.css                           # styles de main.jsx
+│   ├── main.jsx                            # point d'entrée React/Vite
+│   └── mockBackend.js                      # backend simulé pour tests
+├── .prettierrc                             # règles Prettier (formatage)
+├── .prettierignore                         # fichiers ignorés par Prettier
+├── Dockerfile                              # configuration Docker pour le déploiement
+├── eslint.config.js                        # règles ESLint (qualité du code)
+├── index.html                              # template HTML principal
+├── package.json                            # scripts et dépendances du projet
+├── package-lock.json                       # verrouillage des versions exactes des dépendances
+└── vite.config.js                          # configuration Vite
 ```
