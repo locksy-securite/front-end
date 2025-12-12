@@ -12,7 +12,14 @@ export function CryptoProvider({ children }) {
 
     // Définir la clé maître (appelé après inscription/connexion)
     const setMasterKeyBytes = (bytes) => {
-        setMasterKey(bytes);
+        if (!bytes) {
+            setMasterKey(null);
+            return;
+        }
+
+        // stocke une copie
+        const storedMasterKey = bytes.slice();
+        setMasterKey(storedMasterKey);
     };
 
     // Dériver une sous-clé HKDF pour un usage donné
@@ -23,8 +30,15 @@ export function CryptoProvider({ children }) {
 
     // Effacer toutes les clés (déconnexion)
     const clearKeys = () => {
-        if (masterKey) masterKey.fill(0);
-        setMasterKey(null);
+        try {
+            if (masterKey && typeof masterKey.fill === 'function') {
+                masterKey.fill(0);
+            }
+        } catch {
+            // best-effort
+        } finally {
+            setMasterKey(null);
+        }
     };
 
     return (

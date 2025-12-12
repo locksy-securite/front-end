@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import EmailInput from '../components/EmailInput';
@@ -12,7 +12,7 @@ import { SUBKEYS, fromUtf8, deriveSubKey } from '../utils/cryptoKeys.js';
 import { checkPwnedCount } from '../utils/pwned.js';
 
 // Helpers sécurisés pour encodage
-const toBase64 = (bytes) => {
+const toBase64Reg = (bytes) => {
     let binary = '';
     const bytesArray = new Uint8Array(bytes);
     const len = bytesArray.byteLength;
@@ -27,6 +27,103 @@ const ENVELOPE_META = {
     kdf: { alg: 'argon2id', params: { m: 65536, t: 3, p: 1, hashLen: 32 } },
     encryption: { alg: 'aes-256-gcm', tagBits: 128 },
 };
+
+const ENVELOPE_META_REG = ENVELOPE_META;
+
+const wipeReg = (buf) => {
+    try {
+        if (buf && typeof buf.fill === 'function') buf.fill(0);
+    } catch {
+        // best-effort
+    }
+};
+
+async function deriveMasterKeyReg(password, saltUint8) {
+    const { hash } = await argon2.hash({
+        pass: password,
+        salt: saltUint8,
+        type: 'argon2id',
+        memoryCost: ENVELOPE_META_REG.kdf.params.m,
+        timeCost: ENVELOPE_META_REG.kdf.params.t,
+        parallelism: ENVELOPE_META_REG.kdf.params.p,
+        hashLen: ENVELOPE_META_REG.kdf.params.hashLen,
+    });
+
+    return new Uint8Array(hash);
+}
+
+async function encryptWithSubkeyReg(
+    masterKeyBytes,
+    subkeyLabel,
+    aadObj,
+    payloadStr,
+    saltB64
+) {
+    const subkey = await deriveSubKey(masterKeyBytes, subkeyLabel, 32);
+
+    const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        subkey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt']
+    );
+
+    // 4. IV/nonce aléatoire (12 octets) pour GCM
+    //    Généré côté client et préfixé au ciphertext pour que le serveur puisse le réutiliser au déchiffrement.
+    const nonce = new Uint8Array(12);
+    crypto.getRandomValues(nonce);
+
+    // 5. AAD (contexte)
+    //    "Additional Authenticated Data" — données non chiffrées mais couvertes par la tag d'authentification.
+    //    On inclut la version, l'email, les paramètres KDF et la date de création afin d'éviter le replay et
+    //    d'attacher le contexte à la preuve.
+    const aadString = JSON.stringify(aadObj);
+    const aad = fromUtf8(aadString);
+
+    // 6. Payload minimal
+    //    Preuve minimale (par exemple 'registration_proof_v1') encodée en bytes et chiffrée avec AES-GCM.
+    const payload = fromUtf8(payloadStr);
+
+    try {
+        const ciphertext = await crypto.subtle.encrypt(
+            {
+                name: 'AES-GCM',
+                iv: nonce,
+                additionalData: aad,
+                tagLength: ENVELOPE_META_REG.encryption.tagBits,
+            },
+            cryptoKey,
+            payload
+        );
+
+        const dataB64 = toBase64Reg(
+            new Uint8Array([...nonce, ...new Uint8Array(ciphertext)]).buffer
+        );
+
+        return {
+            ...ENVELOPE_META_REG,
+            salt: saltB64,
+            aad_json: aadString,
+            data_b64: dataB64,
+        };
+    } finally {
+        wipeReg(subkey);
+        wipeReg(nonce);
+        if (aad)
+            try {
+                new Uint8Array(aad.buffer).fill(0);
+            } catch {
+                // best-effort
+            }
+        if (payload)
+            try {
+                new Uint8Array(payload.buffer).fill(0);
+            } catch {
+                // best-effort
+            }
+    }
+}
 
 export default function RegisterForm({ onToast }) {
     const navigate = useNavigate();
@@ -48,322 +145,159 @@ export default function RegisterForm({ onToast }) {
         }
     }, [password]);
 
-    const handleRegister = async (e) => {
-        e.preventDefault();
-        setLoading(true);
+    const withTimeout = (promise, ms = 5000) =>
+        Promise.race([
+            promise,
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('timeout')), ms)
+            ),
+        ]);
 
-        // Buffers à effacer après usage
-        let salt = null;
-        let masterKeyBytes = null;
-        let registrationKeyBytes = null;
-        let nonce = null;
-        let aad = null;
-        let registrationPayload = null;
+    const handleRegister = useCallback(
+        async (e) => {
+            e.preventDefault();
+            setLoading(true);
 
-        const HIBP_BLOCK_ON_PWNED = true;
-        
-        const withTimeout = (promise, ms = 5000) =>
-            Promise.race([
-                promise,
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('timeout')), ms)
-                ),
-            ]);
+            let salt = null;
+            let masterKeyBytes = null;
 
-        // Vérification HaveIBeenPwned
-        try {
-            // Timeout de 5 secondes maximum
-            const pwnedCount = await withTimeout(checkPwnedCount(password), 5000);
+            const HIBP_BLOCK_ON_PWNED = true;
 
-            if (pwnedCount > 0) {
-                // Message clair pour l’utilisateur
-                const msg = `Ce mot de passe apparaît ${pwnedCount.toLocaleString()} fois dans des fuites connues. Veuillez en choisir un autre.`;
-
-                if (HIBP_BLOCK_ON_PWNED) {
-                    // Refus : mot de passe compromis
-                    onToast?.('error', msg);
-                    setLoading(false);
-                    return;
-                } else {
-                    // Politique permissive : avertir mais autoriser (optionnel)
-                    onToast?.('warning', msg);
-                }
-            }
-        } catch (hibpErr) {
-            /// Erreur réseau / API / timeout : on informe, mais on autorise l'inscription
-            console.warn(
-                'Échec de la vérification HIBP — procédure ignorée.',
-                hibpErr
-            );
-
-            onToast?.(
-                'info',
-                'Impossible de vérifier si le mot de passe figure dans des fuites — vérification ignorée.'
-            );
-        }
-
-        try {
-            // 1. Sel aléatoire pour Argon2id (16 octets)
-            salt = new Uint8Array(16);
-            crypto.getRandomValues(salt);
-
-            // 2. Dérivation côté client (clé maître) — jamais envoyer le mot de passe brut
-            const { hash } = await argon2.hash({
-                pass: password,
-                salt,
-                type: 'argon2id',
-                memoryCost: ENVELOPE_META.kdf.params.m, // 64 MiB
-                timeCost: ENVELOPE_META.kdf.params.t, // 3
-                parallelism: ENVELOPE_META.kdf.params.p, // 1
-                hashLen: ENVELOPE_META.kdf.params.hashLen, // 32
-            });
-
-            // Clé maître issue d'Argon2id
-            masterKeyBytes = new Uint8Array(hash);
-            setMasterKeyBytes(masterKeyBytes); // stockée globalement dans CryptoProvider
-
-            // 3. HKDF : dériver une sous-clé spécifique pour l'inscription
-            registrationKeyBytes = await deriveSubKey(
-                masterKeyBytes,
-                SUBKEYS.registration,
-                32
-            );
-
-            // 4. Chiffrement de la preuve d'inscription (AES-GCM)
-            const cryptoKey = await crypto.subtle.importKey(
-                'raw',
-                registrationKeyBytes,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['encrypt']
-            );
-
-            // IV/nonce aléatoire (12 octets) pour GCM
-            nonce = new Uint8Array(12);
-            crypto.getRandomValues(nonce);
-
-            const createdAt = Date.now();
-            const aadString = JSON.stringify({
-                v: ENVELOPE_META.version,
-                email,
-                kdf: ENVELOPE_META.kdf,
-                created_at: createdAt,
-            });
-            aad = fromUtf8(aadString);
-
-            // Preuve minimale d'inscription
-            registrationPayload = fromUtf8('registration_proof_v1');
-
-            // Chiffrement authentifié (AES-GCM)
-            const ciphertext = await crypto.subtle.encrypt(
-                {
-                    name: 'AES-GCM',
-                    iv: nonce,
-                    additionalData: aad,
-                    tagLength: ENVELOPE_META.encryption.tagBits,
-                },
-                cryptoKey,
-                registrationPayload
-            );
-
-            // 5. Enveloppe transportable (nonce + ciphertext en Base64)
-            const envelope = {
-                ...ENVELOPE_META,
-                salt: toBase64(salt),
-                aad_json: aadString,
-                data_b64: toBase64(
-                    new Uint8Array([...nonce, ...new Uint8Array(ciphertext)])
-                        .buffer
-                ),
-            };
-
-            // 6. Envoi au serveur (inscription)
-            // - users.email : VARCHAR
-            // - users.passwordHash : BYTEA (convertir depuis Base64 côté serveur)
-            // - users.salt : BYTEA (convertir depuis Base64 côté serveur)
-            await api.post('/auth/register', {
-                email,
-                passwordHash: toBase64(masterKeyBytes), // le "verifier" dérivé, pas le mot de passe
-                salt: toBase64(salt),
-                envelope,
-            });
-
-            // 7. Auto-login : dériver sous-clé login, créer enveloppe login et appeler useAuth().login()
             try {
-                // dériver sous-clé login
-                const loginKeyBytes = await deriveSubKey(
-                    masterKeyBytes,
-                    SUBKEYS.login,
-                    32
-                );
+                // Vérification HaveIBeenPwned (timeout 5s)
+                try {
+                    const pwnedCount = await withTimeout(
+                        checkPwnedCount(password),
+                        5000
+                    );
 
-                const loginCryptoKey = await crypto.subtle.importKey(
-                    'raw',
-                    loginKeyBytes,
-                    { name: 'AES-GCM', length: 256 },
-                    false,
-                    ['encrypt']
-                );
+                    if (pwnedCount > 0) {
+                        const msg = `Ce mot de passe apparaît ${pwnedCount.toLocaleString()} fois dans des fuites connues. Veuillez en choisir un autre.`;
 
-                const loginNonce = new Uint8Array(12);
-                crypto.getRandomValues(loginNonce);
+                        if (HIBP_BLOCK_ON_PWNED) {
+                            onToast?.('error', msg);
+                            setLoading(false);
+                            return;
+                        }
 
-                const loginAadString = JSON.stringify({
-                    v: ENVELOPE_META.version,
+                        onToast?.('warning', msg);
+                    }
+                } catch (hibpErr) {
+                    console.warn(
+                        'Échec de la vérification HIBP — procédure ignorée.',
+                        hibpErr
+                    );
+                    onToast?.(
+                        'info',
+                        'Impossible de vérifier si le mot de passe figure dans des fuites — vérification ignorée.'
+                    );
+                }
+
+                // 1. Sel aléatoire pour Argon2id (16 octets)
+                salt = new Uint8Array(16);
+                crypto.getRandomValues(salt);
+
+                // 2. Dérivation côté client (clé maître) — jamais envoyer le mot de passe brut
+                masterKeyBytes = await deriveMasterKeyReg(password, salt);
+                setMasterKeyBytes(masterKeyBytes);
+
+                // 3. HKDF : dériver une sous-clé spécifique pour l'inscription et chiffrer la preuve
+                const aadObj = {
+                    v: ENVELOPE_META_REG.version,
                     email,
-                    kdf: ENVELOPE_META.kdf,
-                    login_at: Date.now(),
-                });
-                const loginAad = fromUtf8(loginAadString);
-                const loginPayload = fromUtf8('login_proof_v1');
-
-                const loginCiphertext = await crypto.subtle.encrypt(
-                    {
-                        name: 'AES-GCM',
-                        iv: loginNonce,
-                        additionalData: loginAad,
-                        tagLength: ENVELOPE_META.encryption.tagBits,
-                    },
-                    loginCryptoKey,
-                    loginPayload
-                );
-
-                const loginEnvelope = {
-                    ...ENVELOPE_META,
-                    salt: toBase64(salt),
-                    aad_json: loginAadString,
-                    data_b64: toBase64(
-                        new Uint8Array([
-                            ...loginNonce,
-                            ...new Uint8Array(loginCiphertext),
-                        ]).buffer
-                    ),
+                    kdf: ENVELOPE_META_REG.kdf,
+                    created_at: Date.now(),
                 };
 
-                // Appel login via AuthProvider (serveur doit set cookie refresh + renvoyer accessToken)
-                await login({
+                // 4/5/6. Générer nonce, préparer AAD et payload, chiffrer avec sous-clé (AES-GCM)
+                const envelope = await encryptWithSubkeyReg(
+                    masterKeyBytes,
+                    SUBKEYS.registration,
+                    aadObj,
+                    'registration_proof_v1',
+                    toBase64Reg(salt)
+                );
+
+                // 7. Envoi au serveur (inscription)
+                await api.post('/auth/register', {
                     email,
-                    passwordHash: toBase64(masterKeyBytes),
-                    envelope: loginEnvelope,
+                    passwordHash: toBase64Reg(masterKeyBytes), // le "verifier" dérivé, pas le mot de passe
+                    salt: toBase64Reg(salt),
+                    envelope,
                 });
 
-                onToast?.('success', 'Compte créé et connecté avec succès.');
-                // cleanup des buffers loginKey/nonce/payload
+                // 8. Auto-login : dériver sous-clé login, créer enveloppe login et appeler useAuth().login()
                 try {
-                    registrationKeyBytes && registrationKeyBytes.fill(0);
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
+                    const loginAadObj = {
+                        v: ENVELOPE_META_REG.version,
+                        email,
+                        kdf: ENVELOPE_META_REG.kdf,
+                        login_at: Date.now(),
+                    };
+
+                    const loginEnvelope = await encryptWithSubkeyReg(
+                        masterKeyBytes,
+                        SUBKEYS.login,
+                        loginAadObj,
+                        'login_proof_v1',
+                        toBase64Reg(salt)
+                    );
+
+                    await login({
+                        email,
+                        passwordHash: toBase64Reg(masterKeyBytes),
+                        envelope: loginEnvelope,
+                    });
+
+                    setEmail('');
+                    setPassword('');
+
+                    onToast?.(
+                        'success',
+                        'Compte créé et connecté avec succès.'
+                    );
+                    navigate('/dashboard/passwords');
+                } catch (autoLoginErr) {
+                    console.warn('Auto-login failed', autoLoginErr);
+                    onToast?.(
+                        'info',
+                        'Compte créé. Connexion automatique impossible — connectez-vous.'
+                    );
+                    navigate('/login');
                 }
+            } catch (err) {
+                console.error('Registration error:', err?.message || err);
+                const errorMsg =
+                    err?.response?.data?.message ||
+                    "Échec de l'inscription. Réessayez.";
+                onToast?.('error', errorMsg);
 
                 try {
-                    if (salt) salt.fill(0);
+                    if (masterKeyBytes) wipeReg(masterKeyBytes);
+                    clearKeys?.();
                 } catch {
-                    // Ignorer : nettoyage mémoire non critique
+                    // best-effort
                 }
-
-                try {
-                    if (nonce) nonce.fill(0);
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
-                }
-
-                try {
-                    if (aad) {
-                        const a = new Uint8Array(aad.buffer);
-                        a.fill(0);
-                    }
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
-                }
-
-                try {
-                    if (registrationPayload) {
-                        const p = new Uint8Array(registrationPayload.buffer);
-                        p.fill(0);
-                    }
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
-                }
-
-                // redirection vers dashboard
-                navigate('/dashboard/passwords');
-            } catch {
-                // Si auto-login échoue, informer et rediriger vers /login (utilisateur peut se connecter manuellement)
-                onToast?.(
-                    'info',
-                    'Compte créé. Connexion automatique impossible — connectez-vous.'
-                );
-                navigate('/login');
             } finally {
-                // Wiping élargi des buffers sensibles liés à l'inscription
-                try {
-                    registrationKeyBytes && registrationKeyBytes.fill(0);
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
-                }
-
-                try {
-                    if (salt) salt.fill(0);
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
-                }
-
-                try {
-                    if (nonce) nonce.fill(0);
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
-                }
-
-                try {
-                    if (aad) {
-                        const a = new Uint8Array(aad.buffer);
-                        a.fill(0);
-                    }
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
-                }
-
-                try {
-                    if (registrationPayload) {
-                        const p = new Uint8Array(registrationPayload.buffer);
-                        p.fill(0);
-                    }
-                } catch {
-                    // Ignorer : nettoyage mémoire non critique
-                }
+                masterKeyBytes = null;
+                salt = null;
+                setLoading(false);
             }
-        } catch (err) {
-            console.error('Registration error:', err?.message || err);
-            const errorMsg =
-                err?.response?.data?.message ||
-                "Échec de l'inscription. Réessayez.";
-            onToast?.('error', errorMsg);
-            // en cas d'erreur critique, effacer la clé maître globale si définie
-            try {
-                if (masterKeyBytes) {
-                    masterKeyBytes.fill(0);
-                }
-                clearKeys?.();
-            } catch {
-                // Ignorer : nettoyage mémoire non critique
-            }
-            // rester sur la page d'inscription
-        } finally {
-            // Nettoyage des références locales
-            masterKeyBytes = null;
-            registrationKeyBytes = null;
-            salt = null;
-            nonce = null;
-            aad = null;
-            registrationPayload = null;
-            setLoading(false);
-            setEmail('');
-            setPassword('');
-        }
-    };
+        },
+        [
+            email,
+            password,
+            setMasterKeyBytes,
+            clearKeys,
+            login,
+            navigate,
+            onToast,
+        ]
+    );
 
     const renderStrength = () => {
         if (!passwordStrength) return null;
+
         const levels = ['Très faible', 'Faible', 'Moyen', 'Fort', 'Très fort'];
         const colors = [
             'badge-error',
@@ -372,6 +306,7 @@ export default function RegisterForm({ onToast }) {
             'badge-success',
             'badge-success',
         ];
+
         return (
             <div className={`badge ${colors[passwordStrength.score]} mt-2`}>
                 <span>
