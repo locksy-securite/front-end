@@ -13,6 +13,7 @@ import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import PasswordsPage from './pages/dashboard/PasswordsPage.jsx';
+import PasswordGeneratorPage from './pages/dashboard/PasswordGeneratorPage.jsx';
 import RequireAuth from './components/RequireAuth';
 
 function App() {
@@ -64,7 +65,9 @@ function App() {
                                             path="passwords"
                                             element={<PasswordsPage />}
                                         />
-                                        <Route path="password-generator" />
+                                        <Route 
+                                            path="password-generator" 
+                                            element={<PasswordGeneratorPage />}/>
                                     </Route>
                                     <Route
                                         path="*"
