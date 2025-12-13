@@ -66,8 +66,10 @@ npm install
 3. Ajouter un fichier d'environnement `.env` (exemple) :
 ```
 VITE_API_URL={API_URL}
+VITE_MOCK_BACKEND={true ou false}
 ```
 - **VITE_API_URL** : URL de base utilisée par Axios pour communiquer avec le backend (/api en développement local)
+- **VITE_MOCK_BACKEND** : booléen (true ou false) qui active le backend mocké uniquement si l'application est lancée en mode développement (import.meta.env.DEV) et que la variable est définie à true, avec une valeur par défaut false si elle n'est pas précisée
 
 4. Lancer le serveur de développement :
 ```bash
@@ -96,13 +98,13 @@ Locksy repose sur un modèle **zero‑knowledge** : le serveur ne connaît jamai
     Le serveur ne stocke que le ciphertext et les métadonnées, jamais les clés.
     
 -   **Dérivation des clés (Argon2id)**  
-    La clé maître est dérivée du mot de passe utilisateur via Argon2id en WebAssembly, avec un sel unique fourni à l’inscription.  
-    Elle reste uniquement en mémoire côté client et n’est jamais transmise.  
+    La clé maître est dérivée du mot de passe utilisateur via Argon2id en WebAssembly, avec un sel unique fourni à l'inscription.  
+    Elle reste uniquement en mémoire côté client et n'est jamais transmise.  
     Ce mécanisme rend les attaques par dictionnaire ou par GPU/ASIC beaucoup plus coûteuses.
     
 -   **Sous‑clés indépendantes (HKDF)**  
     À partir de la clé maître, Locksy dérive plusieurs sous‑clés spécifiques (connexion, coffre de mots de passe, notes, etc.).  
-    Chaque sous‑clé est isolée : un compromis n’affecte pas les autres.  
+    Chaque sous‑clé est isolée : un compromis n'affecte pas les autres.  
     Cela garantit un compartimentage cryptographique robuste.
     
 -   **Enveloppes versionnées**  
@@ -110,17 +112,17 @@ Locksy repose sur un modèle **zero‑knowledge** : le serveur ne connaît jamai
     Ce format auto‑descriptif assure la compatibilité future et permet de migrer vers de nouveaux algorithmes sans perte de données.
     
 -   **Connexion zero‑knowledge**  
-    Lors du login, aucune donnée sensible n’est transmise.  
+    Lors du login, aucune donnée sensible n'est transmise.  
     Le client prouve la possession de la clé maître en générant une enveloppe chiffrée minimale, que le serveur peut vérifier sans jamais connaître le mot de passe.
     
 -   **Évaluation des passphrases (zxcvbn)**  
-    À l’inscription, la robustesse des mots de passe est évaluée avec zxcvbn.  
-    L’utilisateur est encouragé à choisir une phrase longue et complexe, avec un retour en temps réel sur la force et des conseils d’amélioration.
+    À l'inscription, la robustesse des mots de passe est évaluée avec zxcvbn.  
+    L'utilisateur est encouragé à choisir une phrase longue et complexe, avec un retour en temps réel sur la force et des conseils d'amélioration.
 
 -   **Vérification contre les fuites (HaveIBeenPwned)**  
-    À l’inscription, Locksy interroge HaveIBeenPwned en mode k‑anonymity.  
+    À l'inscription, Locksy interroge HaveIBeenPwned en mode k‑anonymity.  
     Seul un préfixe du hash SHA‑1 est transmis, garantissant la confidentialité.  
-    Si le mot de passe figure dans des fuites connues, l’utilisateur est averti ou bloqué afin d’éviter toute réutilisation compromise.
+    Si le mot de passe figure dans des fuites connues, l'utilisateur est averti ou bloqué afin d'éviter toute réutilisation compromise.
 
 ---
 
@@ -136,7 +138,7 @@ front-end/
 │   │   ├── dashboard/
 │   │   │   ├── AccountDropdown.jsx         # menu utilisateur (profil, déconnexion)
 │   │   │   ├── Header.jsx                  # barre supérieure du dashboard
-│   │   │   ├── PasswordRow.jsx             # ligne individuelle d’un mot de passe
+│   │   │   ├── PasswordRow.jsx             # ligne individuelle d'un mot de passe
 │   │   │   ├── PasswordList.jsx            # liste des mots de passe affichés et formulaire d'ajout / modification
 │   │   │   └── SideBar.jsx                 # barre latérale de navigation
 │   │   ├── EmailInput.jsx                  # champ email avec validation
@@ -174,7 +176,7 @@ front-end/
 │   │   └── RegisterPage.jsx                # page d'inscription
 │   ├── utils/
 │   │   ├── cryptoKeys.js                   # utilitaires HKDF et dérivation
-│   │   └── pwned.js                        # vérification des mots de passe via l’API HIBP (k-anonymity)
+│   │   └── pwned.js                        # vérification des mots de passe via l'API HIBP (k-anonymity)
 │   ├── App.css                             # styles globaux (Tailwind/DaisyUI)
 │   ├── App.jsx                             # composant racine et routes
 │   ├── index.css                           # styles de main.jsx
