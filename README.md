@@ -71,6 +71,8 @@ VITE_MOCK_BACKEND={true ou false}
 - **VITE_API_URL** : URL de base utilisée par Axios pour communiquer avec le backend (/api en développement local)
 - **VITE_MOCK_BACKEND** : booléen (true ou false) qui active le backend mocké uniquement si l'application est lancée en mode développement (import.meta.env.DEV) et que la variable est définie à true, avec une valeur par défaut false si elle n'est pas précisée
 
+⚠️ **Important** : si vous avez lancé le front avec le mock backend activé (`VITE_MOCK_BACKEND=true`) et que vous le désactivez ensuite pour utiliser le vrai backend, pensez à **supprimer les données stockées par le mock dans le localStorage** (via les DevTools du navigateur) afin d'éviter tout conflit avec les données du backend.
+
 4. Lancer le serveur de développement :
 ```bash
 npm run dev
