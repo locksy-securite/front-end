@@ -91,8 +91,8 @@ export default function setupMock() {
     let users = loadUsers(); // { email: { salt, passwordHash } }
 
     // small helpers
-    const ok = (body = {}) => [200, body];
-    const created = (body = {}) => [201, body];
+    const ok = (body = {}, headers = {}) => [200, body, headers];
+    const created = (body = {}, headers = {}) => [201, body, headers];
     const badRequest = (msg = 'Bad request') => [400, { message: msg }];
     const unauthorized = (msg = 'Unauthorized') => [401, { message: msg }];
     const forbidden = (msg = 'Forbidden') => [403, { message: msg }];
@@ -155,13 +155,12 @@ export default function setupMock() {
                 return forbidden('Mock: compte verrouillé.');
             }
 
-            // créer tokens côté mock et renvoyer accessToken + refreshToken + user
+            // créer tokens côté mock
             const accessTokens = loadAccessTokens();
             const refreshTokens = loadRefreshTokens();
 
             const accessToken = `mock-access-${makeId()}`;
             const refreshToken = `mock-refresh-${makeId()}`;
-            const user = { email };
 
             accessTokens[accessToken] = email;
             refreshTokens[refreshToken] = email;
@@ -172,12 +171,22 @@ export default function setupMock() {
             // compatibilité: conserver mockSession (certains anciens handlers pouvaient s'appuyer dessus)
             setMockSession(email);
 
-            return ok({
-                message: 'Mock: connexion réussie.',
-                accessToken,
-                refreshToken,
-                user,
-            });
+            // headers identiques au backend
+            const headers = {
+                Authorization: `Bearer ${accessToken}`,
+                'x-refresh-token': refreshToken,
+            };
+
+            // body identique au backend
+            return ok(
+                {
+                    message: 'Mock: connexion réussie.',
+                    accessToken,
+                    refreshToken,
+                    userEmail: email, // <-- même clé que backend
+                },
+                headers
+            );
         } catch {
             return serverError('Mock: payload invalide.');
         }
@@ -215,12 +224,16 @@ export default function setupMock() {
             // mise à jour de la session (compatibilité)
             setMockSession(email);
 
-            const user = { email };
-            return ok({
-                accessToken: newAccess,
-                refreshToken: newRefresh,
-                user,
-            });
+            // headers identiques au backend
+            const headers = {
+                Authorization: `Bearer ${newAccess}`,
+                'X-Refresh-Token': newRefresh,
+                'Access-Control-Expose-Headers':
+                    'Authorization, X-Refresh-Token',
+            };
+
+            // body identique au backend
+            return ok({ message: 'Token refreshed' }, headers);
         } catch {
             return serverError('Mock: payload invalide.');
         }

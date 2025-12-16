@@ -22,7 +22,7 @@ export default function RequireAuth() {
 
     // Rend le layout qui contient l'Outlet pour les routes enfant
     return (
-        <DashboardLayout email={user?.email} onLogout={logout}>
+        <DashboardLayout email={user} onLogout={logout}>
             <Outlet />
         </DashboardLayout>
     );
