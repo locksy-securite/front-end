@@ -5,21 +5,10 @@ import { useCrypto } from '../hooks/useCrypto';
 import { AuthContext } from './authContext.js';
 
 // Variables globales pour gérer le refresh
-let isRefreshing = false;
-let refreshQueue = [];
-
-/**
- * Vide la file d’attente des requêtes en attente de refresh.
- * Si une erreur est passée, toutes les promesses sont rejetées.
- * Sinon, elles sont résolues avec le nouveau token.
- */
-const processQueue = (error, token = null) => {
-    refreshQueue.forEach(({ resolve, reject }) => {
-        if (error) reject(error);
-        else resolve(token);
-    });
-    refreshQueue = [];
-};
+// On utilise une promesse partagée (refreshPromise) pour sérialiser
+// les opérations de refresh : une seule requête /auth/refresh-token
+// est effectuée à la fois; les autres awaiters attendent la même promesse.
+let refreshPromise = null;
 
 /**
  * Détecte si une URL correspond à une route d’authentification
@@ -65,6 +54,46 @@ export function AuthProvider({ children }) {
         refreshTokenRef.current = refreshToken;
     }, [refreshToken]);
 
+    /**
+     * Effectue la requête de refresh et applique les nouveaux tokens.
+     * Retourne le nouvel accessToken (string) en cas de succès.
+     * Lance une erreur si le refresh échoue.
+     *
+     * Cette fonction encapsule le parsing (body vs headers) et la mise à jour
+     * des refs + state pour éviter la duplication.
+     */
+    const requestRefresh = async (currentRefresh) => {
+        const res = await api.post('/auth/refresh-token', {
+            refreshToken: currentRefresh,
+        });
+
+        // Priorité au body, fallback aux headers
+        const newToken =
+            res?.data?.accessToken ||
+            (res?.headers?.authorization
+                ? res.headers.authorization.replace('Bearer ', '')
+                : null) ||
+            null;
+        const newRefreshToken =
+            res?.data?.refreshToken ||
+            res?.headers?.['x-refresh-token'] ||
+            null;
+
+        if (!newToken) {
+            throw new Error('No accessToken returned from /auth/refresh-token');
+        }
+
+        // Mettre à jour refs immédiatement pour éviter les lectures obsolètes
+        accessTokenRef.current = newToken;
+        if (newRefreshToken) refreshTokenRef.current = newRefreshToken;
+
+        // Mettre à jour l'état React (pour le reste de l'application)
+        setAccessToken(newToken);
+        if (newRefreshToken) setRefreshToken(newRefreshToken);
+
+        return newToken;
+    };
+
     // Interceptors Axios — enregistrer UNE seule fois au montage
     useEffect(() => {
         // Ajoute le token Authorization à chaque requête sortante
@@ -108,56 +137,39 @@ export function AuthProvider({ children }) {
                         return Promise.reject(err);
                     }
 
-                    if (isRefreshing) {
-                        // Mettre en file d’attente jusqu’à la fin du refresh
-                        return new Promise((resolve, reject) => {
-                            refreshQueue.push({
-                                resolve: (token) => {
-                                    originalRequest.headers =
-                                        originalRequest.headers || {};
-                                    originalRequest.headers.Authorization = `Bearer ${token}`;
-                                    resolve(api(originalRequest));
-                                },
-                                reject,
-                            });
-                        });
-                    }
-
                     originalRequest._retry = true;
-                    isRefreshing = true;
 
                     try {
-                        // On envoie le refreshToken dans le body (JSON)
-                        // Backend: /auth/refresh-token renvoie { accessToken, refreshToken } (rotation)
-                        const { data } = await api.post('/auth/refresh-token', {
-                            refreshToken: currentRefresh,
-                        });
-
-                        const newToken = data?.accessToken || null;
-                        const newRefreshToken = data?.refreshToken || null;
-
-                        if (!newToken) {
-                            throw new Error(
-                                'No accessToken returned from /auth/refresh-token'
-                            );
+                        // Si un refresh est déjà en cours, attendre sa promesse
+                        if (!refreshPromise) {
+                            // Créer la promesse de refresh (une seule requête réseau)
+                            refreshPromise = (async () => {
+                                try {
+                                    return await requestRefresh(currentRefresh);
+                                } catch (innerErr) {
+                                    console.error(
+                                        'Refresh token failed',
+                                        innerErr
+                                    );
+                                    // Propager une erreur claire vers les awaiters
+                                    throw innerErr;
+                                }
+                            })();
                         }
 
-                        // Mettre à jour état ET refs (refs seront mis à jour par les effects d'état)
-                        setAccessToken(newToken);
-                        if (newRefreshToken) setRefreshToken(newRefreshToken);
-
-                        processQueue(null, newToken);
-                        isRefreshing = false;
+                        // Attendre la promesse de refresh (créée par le premier demandeur)
+                        const obtainedToken = await refreshPromise;
+                        // Réinitialiser la promesse maintenant qu'elle est résolue
+                        refreshPromise = null;
 
                         // Relancer la requête avec le nouveau token
                         originalRequest.headers = originalRequest.headers || {};
-                        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                        originalRequest.headers.Authorization = `Bearer ${obtainedToken}`;
+
                         return api(originalRequest);
                     } catch (refreshErr) {
-                        isRefreshing = false;
-                        processQueue(refreshErr, null);
-
-                        // Dernier recours : vider la session côté client
+                        // Nettoyage et déconnexion si refresh échoue
+                        refreshPromise = null; // permettre une nouvelle tentative plus tard
                         setAccessToken(null);
                         setRefreshToken(null);
                         setUser(null);
@@ -181,7 +193,10 @@ export function AuthProvider({ children }) {
             api.interceptors.response.eject(resInterceptor);
         };
         // NOTA: [] — on veut installer les interceptors une seule fois au montage
-    }, [addToast, crypto]);
+    }, [
+        addToast,
+        crypto /* requestRefresh n'est pas en dep pour éviter retriggers */,
+    ]);
 
     // Initialisation : tentative de refresh silencieux
     useEffect(() => {
@@ -192,16 +207,8 @@ export function AuthProvider({ children }) {
                 // Ici, comme le refreshToken est en mémoire, on ne tente un refresh silencieux que si refreshToken est déjà présent.
                 if (!refreshTokenRef.current) return;
 
-                const { data } = await api.post('/auth/refresh-token', {
-                    refreshToken: refreshTokenRef.current,
-                });
+                await requestRefresh(refreshTokenRef.current);
                 if (!mounted) return;
-
-                if (data?.accessToken) {
-                    setAccessToken(data.accessToken);
-                    if (data.user) setUser(data.user); // optionnel
-                    if (data?.refreshToken) setRefreshToken(data.refreshToken); // rotation
-                }
             } catch {
                 // Pas de refresh possible -> reste déconnecté
             } finally {
@@ -228,9 +235,14 @@ export function AuthProvider({ children }) {
                 const token = res.data?.accessToken || null;
                 const rToken = res.data?.refreshToken || null;
 
+                // Mettre à jour état + refs
+                if (token) accessTokenRef.current = token;
+                if (rToken) refreshTokenRef.current = rToken;
+
                 setAccessToken(token);
                 setRefreshToken(rToken); // <-- stocke le refresh token en mémoire
-                setUser(res.data?.user || null);
+
+                setUser(res.data?.userEmail || null);
                 return res.data;
             } catch (err) {
                 addToast?.('error', 'Échec de la connexion.');
@@ -252,6 +264,8 @@ export function AuthProvider({ children }) {
             setAccessToken(null);
             setRefreshToken(null);
             setUser(null);
+            accessTokenRef.current = null;
+            refreshTokenRef.current = null;
             crypto?.clearKeys?.(); // important : vider la clé maître
             addToast?.('success', 'Déconnecté.');
         }
